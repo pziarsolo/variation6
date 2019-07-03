@@ -1,0 +1,6 @@
+{
+    "Description": "Depth of reference-supporting bases on forward strand (reads1plus)",
+    "ID": "RDF",
+    "Number": "1",
+    "Type": "Integer"
+}

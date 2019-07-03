@@ -1,0 +1,6 @@
+{
+    "Description": "Alternate allele observation count",
+    "ID": "AO",
+    "Number": "A",
+    "Type": "Integer"
+}

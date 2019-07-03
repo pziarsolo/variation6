@@ -1,0 +1,6 @@
+{
+    "Description": "Number of samples called heterozygous-variant",
+    "ID": "HET",
+    "Number": "1",
+    "Type": "Integer"
+}

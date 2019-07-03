@@ -1,0 +1,6 @@
+{
+    "Description": "Number of samples not called",
+    "ID": "NC",
+    "Number": "1",
+    "Type": "Integer"
+}

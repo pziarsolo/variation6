@@ -1,0 +1,6 @@
+{
+    "Description": "Average quality of reference-supporting bases (qual1)",
+    "ID": "RBQ",
+    "Number": "1",
+    "Type": "Integer"
+}

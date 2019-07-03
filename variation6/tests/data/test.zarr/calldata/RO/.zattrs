@@ -1,0 +1,6 @@
+{
+    "Description": "Reference allele observation count",
+    "ID": "RO",
+    "Number": "1",
+    "Type": "Integer"
+}

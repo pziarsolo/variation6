@@ -1,0 +1,6 @@
+{
+    "Description": "Quality Read Depth of bases with Phred score >= 20",
+    "ID": "DP",
+    "Number": "1",
+    "Type": "Integer"
+}

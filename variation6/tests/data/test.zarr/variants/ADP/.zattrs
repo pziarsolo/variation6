@@ -1,0 +1,6 @@
+{
+    "Description": "Average per-sample depth of bases with Phred score >= 20",
+    "ID": "ADP",
+    "Number": "1",
+    "Type": "Integer"
+}

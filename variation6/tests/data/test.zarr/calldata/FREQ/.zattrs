@@ -1,0 +1,6 @@
+{
+    "Description": "Variant allele frequency",
+    "ID": "FREQ",
+    "Number": "1",
+    "Type": "String"
+}

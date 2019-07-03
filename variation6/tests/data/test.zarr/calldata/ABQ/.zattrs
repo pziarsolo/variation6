@@ -1,0 +1,6 @@
+{
+    "Description": "Average quality of variant-supporting bases (qual2)",
+    "ID": "ABQ",
+    "Number": "1",
+    "Type": "Integer"
+}

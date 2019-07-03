@@ -1,0 +1,6 @@
+{
+    "Description": "P-value from Fisher's Exact Test",
+    "ID": "PVAL",
+    "Number": "1",
+    "Type": "String"
+}

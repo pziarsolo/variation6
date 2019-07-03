@@ -1,0 +1,6 @@
+{
+    "Description": "Depth of variant-supporting bases on reverse strand (reads2minus)",
+    "ID": "ADR",
+    "Number": "1",
+    "Type": "Integer"
+}

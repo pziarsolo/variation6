@@ -1,0 +1,6 @@
+{
+    "Description": "Number of samples called reference (wild-type)",
+    "ID": "WT",
+    "Number": "1",
+    "Type": "Integer"
+}

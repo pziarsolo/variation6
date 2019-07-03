@@ -1,0 +1,6 @@
+{
+    "Description": "Raw Read Depth as reported by SAMtools",
+    "ID": "SDP",
+    "Number": "1",
+    "Type": "Integer"
+}

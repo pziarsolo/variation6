@@ -1,0 +1,6 @@
+{
+    "Description": "Genotype Quality",
+    "ID": "GQ",
+    "Number": "1",
+    "Type": "Integer"
+}

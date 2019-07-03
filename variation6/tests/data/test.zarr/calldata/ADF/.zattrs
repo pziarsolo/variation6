@@ -1,0 +1,6 @@
+{
+    "Description": "Depth of variant-supporting bases on forward strand (reads2plus)",
+    "ID": "ADF",
+    "Number": "1",
+    "Type": "Integer"
+}

@@ -1,0 +1,6 @@
+{
+    "Description": "Depth of reference-supporting bases on reverse strand (reads1minus)",
+    "ID": "RDR",
+    "Number": "1",
+    "Type": "Integer"
+}

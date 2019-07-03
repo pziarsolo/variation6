@@ -1,0 +1,4 @@
+.project
+.pydevproject
+*.vscode/*
+*__pycache__*
