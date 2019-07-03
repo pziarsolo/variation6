@@ -5,7 +5,9 @@ from variation6 import VARIATION_FIELDS, CALL_FIELDS
 
 ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
 
+
 class Variations:
+
     def __init__(self, samples=None):
         self._samples = None
         self.samples = samples
@@ -55,12 +57,12 @@ class Variations:
             msg += "addded matrices"
             raise ValueError(msg)
 
-        if (key in CALL_FIELDS
-                and self.num_samples != 0
-                and not math.isnan(self.num_samples)
+        if key in CALL_FIELDS and self.num_samples == 0:
+            raise ValueError('can not set call data if samples are not deefined')
+
+        if (key in CALL_FIELDS and not math.isnan(self.num_samples)
                 and self.num_samples != value.shape[1]):
             raise ValueError('Shape of the array does not fit with num samples')
-
 
         self._arrays[key] = value
 
@@ -73,5 +75,5 @@ class Variations:
     def get_vars(self, index):
         variations = Variations(samples=self.samples)
         for key, array in self._arrays.items():
-            variations[key] = array[index,]
+            variations[key] = array[index, ]
         return variations

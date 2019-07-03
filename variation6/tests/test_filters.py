@@ -3,7 +3,7 @@ import numpy as np
 
 from variation6 import GT_FIELD, DP_FIELD, MISSING_INT
 from variation6.tests import TEST_DATA_DIR
-from variation6.in_out.zarr import load_zarr, save_zarr
+from variation6.in_out.zarr import load_zarr
 from variation6.filters import (filter_by_min_call, FLT_VARS,
                                 min_depth_gt_to_missing,
                                 filter_samples)
@@ -47,8 +47,6 @@ class FilterSamplesTest(unittest.TestCase):
         expected = [[-1, 9], [-1, 8], [-1, 8], [14, 6], [-1, -1], [-1, -1],
                     [-1, 6]]
         self.assertTrue(np.all(dps == expected))
-
-        save_zarr(result[FLT_VARS], TEST_DATA_DIR / 'prueba.zarr')
 
 
 if __name__ == '__main__':
