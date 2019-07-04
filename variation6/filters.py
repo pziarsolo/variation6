@@ -2,19 +2,24 @@ import dask.array as da
 import numpy as np
 
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
-                        PUBLIC_CALL_GROUP)
+                        PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
+                        FLT_VARS, FLT_STATS)
 from variation6.variations import Variations
 from variation6.result import Result
 from variation6.stats import calc_missing_gt
 
-FLT_VARS = 'flt_vars'
 
-
-def filter_by_min_call(variations, min_calls, rates=True):
+def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
+                              filter_id='call_rate'):
     num_missing_gts = calc_missing_gt(variations, rates=rates)['num_missing_gts']
-    selected_vars = num_missing_gts >= min_calls
+    selected_vars = num_missing_gts >= min_call_rate
     variations = variations.get_vars(selected_vars)
-    return Result({FLT_VARS: variations})
+
+    num_selected_vars = da.count_nonzero(selected_vars)
+    num_filtered = da.count_nonzero(da.logical_not(selected_vars))
+
+    flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
+    return Result({FLT_VARS: variations, FLT_STATS: {filter_id: flt_stats}})
 
 
 def _gt_to_missing(variations, field, min_value):

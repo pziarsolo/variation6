@@ -1,21 +1,29 @@
 import unittest
 import numpy as np
 
-from variation6 import GT_FIELD, DP_FIELD, MISSING_INT
+from variation6 import GT_FIELD, DP_FIELD, MISSING_INT, FLT_VARS, FLT_STATS, \
+    TOT
 from variation6.tests import TEST_DATA_DIR
 from variation6.in_out.zarr import load_zarr
-from variation6.filters import (filter_by_min_call, FLT_VARS,
+from variation6.filters import (remove_low_call_rate_vars,
                                 min_depth_gt_to_missing,
                                 filter_samples)
+from variation6.result import Result
+from pprint import pprint
 
 
 class MinCallFilterTest(unittest.TestCase):
 
     def test_filter_by_call_rate(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        result = filter_by_min_call(variations, min_calls=0.5)
+        pipeline_result = Result()
+        result = remove_low_call_rate_vars(variations, min_call_rate=0.5)
+        pipeline_result.update(result)
+        result = remove_low_call_rate_vars(result[FLT_VARS], min_call_rate=0.5,
+                                           filter_id='call_rate2')
+        pipeline_result.update(result)
+        pprint(pipeline_result)
 
-        result = filter_by_min_call(result[FLT_VARS], min_calls=0.5)
         gts = result[FLT_VARS][GT_FIELD].compute()
         self.assertEqual(gts.shape, (2, 3, 2))
 

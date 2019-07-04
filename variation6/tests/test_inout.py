@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -18,11 +19,14 @@ class TestVcfToZarr(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             vcf_path = TEST_DATA_DIR / 'freebayes5.vcf.gz'
             zarr_path = Path(tmpdir)
-            vcf_to_zarr(vcf_path, zarr_path)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                vcf_to_zarr(vcf_path, zarr_path)
 
     def test_zarr_to_variations(self):
         zarr_path = TEST_DATA_DIR / 'test.zarr'
         variations = load_zarr(zarr_path)
+        print(dir(variations[GT_FIELD]))
         self.assertEqual(variations[GT_FIELD].shape, (7, 3, 2))
 
 
@@ -36,7 +40,8 @@ class TestZarrOut(unittest.TestCase):
             tmp_path = Path(tmp_dir)
             save_zarr(variations, tmp_path)
             variations2 = load_zarr(tmp_path)
-            self.assertTrue(np.all(variations.samples == variations2.samples))
+            print(variations.samples.compute(), variations2.samples.compute())
+            self.assertTrue(np.all(variations.samples.compute() == variations2.samples.compute()))
             for field in ALLOWED_FIELDS:
                 # dont chec
                 if field == QUAL_FIELD:

@@ -65,20 +65,26 @@ def load_zarr(path):
                 field = ZARR_VARIATION_FIELD_MAPPING[zarr_field]
             except KeyError:
                 continue
+
+#             print(array.attrs.keys())
+
             variations[field] = da.from_zarr(array)
 
     return variations
 
 
-def save_zarr(variations, out_path):
+def save_zarr(variations, out_path, compute=True):
     store = zarr.DirectoryStore(str(out_path))
     root = zarr.group(store=store, overwrite=True)
-
+    sources = []
+    targets = []
     # samples
     samples_ds = root.create_dataset('samples', shape=variations.samples.shape,
                                      dtype=variations.samples.dtype,
                                      object_codec=numcodecs.VLenUTF8())
-    da.to_zarr(variations.samples, samples_ds)
+    sources.append(variations.samples)
+    targets.append(samples_ds)
+#     da.to_zarr(variations.samples, samples_ds)
 
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
@@ -94,4 +100,9 @@ def save_zarr(variations, out_path):
         dataset = group.create_dataset(definition['field'],
                                        shape=array.shape,
                                        dtype=dtype)
-        da.to_zarr(array, dataset)
+        sources.append(array)
+        targets.append(dataset)
+#         da.to_zarr(array, dataset)
+
+    return da.store(sources, targets, compute=compute)
+
