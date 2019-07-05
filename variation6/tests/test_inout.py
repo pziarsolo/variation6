@@ -26,7 +26,6 @@ class TestVcfToZarr(unittest.TestCase):
     def test_zarr_to_variations(self):
         zarr_path = TEST_DATA_DIR / 'test.zarr'
         variations = load_zarr(zarr_path)
-        print(dir(variations[GT_FIELD]))
         self.assertEqual(variations[GT_FIELD].shape, (7, 3, 2))
 
 
@@ -40,7 +39,6 @@ class TestZarrOut(unittest.TestCase):
             tmp_path = Path(tmp_dir)
             save_zarr(variations, tmp_path)
             variations2 = load_zarr(tmp_path)
-            print(variations.samples.compute(), variations2.samples.compute())
             self.assertTrue(np.all(variations.samples.compute() == variations2.samples.compute()))
             for field in ALLOWED_FIELDS:
                 # dont chec

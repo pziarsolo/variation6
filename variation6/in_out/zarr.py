@@ -57,7 +57,7 @@ def vcf_to_zarr(vcf_path, zarr_path, fields=None):
 def load_zarr(path):
     z_object = zarr.open_group(str(path), mode='r')
     variations = Variations(samples=da.from_zarr(z_object.samples))
-
+    metadata = {}
     for group_name, group in (z_object.groups()):
         for array_name, array in group.arrays():
             zarr_field = f'{group_name}/{array_name}'
@@ -65,11 +65,11 @@ def load_zarr(path):
                 field = ZARR_VARIATION_FIELD_MAPPING[zarr_field]
             except KeyError:
                 continue
-
-#             print(array.attrs.keys())
+            if array.attrs:
+                metadata[field] = dict(array.attrs.items())
 
             variations[field] = da.from_zarr(array)
-
+    variations.metadata = metadata
     return variations
 
 
@@ -78,6 +78,7 @@ def save_zarr(variations, out_path, compute=True):
     root = zarr.group(store=store, overwrite=True)
     sources = []
     targets = []
+    metadata = variations.metadata
     # samples
     samples_ds = root.create_dataset('samples', shape=variations.samples.shape,
                                      dtype=variations.samples.dtype,
@@ -89,6 +90,7 @@ def save_zarr(variations, out_path, compute=True):
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
     for field, definition in ALLELE_ZARR_DEFINITION_MAPPINGS.items():
+        field_metadata = metadata.get(field, None)
         array = variations[field]
         if array is None:
             continue
@@ -100,6 +102,8 @@ def save_zarr(variations, out_path, compute=True):
         dataset = group.create_dataset(definition['field'],
                                        shape=array.shape,
                                        dtype=dtype)
+        if field_metadata:
+            dataset.attrs.put(field_metadata)
         sources.append(array)
         targets.append(dataset)
 #         da.to_zarr(array, dataset)

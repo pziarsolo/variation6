@@ -1,8 +1,7 @@
 import unittest
 import numpy as np
 
-from variation6 import GT_FIELD, DP_FIELD, MISSING_INT, FLT_VARS, FLT_STATS, \
-    TOT
+from variation6 import GT_FIELD, DP_FIELD, MISSING_INT, FLT_VARS
 from variation6.tests import TEST_DATA_DIR
 from variation6.in_out.zarr import load_zarr
 from variation6.filters import (remove_low_call_rate_vars,

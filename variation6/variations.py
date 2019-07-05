@@ -8,10 +8,26 @@ ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
 
 class Variations:
 
-    def __init__(self, samples=None):
+    def __init__(self, samples=None, metadata=None):
         self._samples = None
         self.samples = samples
         self._arrays = {}
+
+        self._metadata = {}
+
+        self.metadata = metadata
+
+    @property
+    def metadata(self):
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, metadata):
+        if self._metadata:
+            raise RuntimeError('Previous samples were present')
+
+        if metadata is not None:
+            self._metadata = metadata
 
     @property
     def samples(self):
