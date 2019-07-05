@@ -49,7 +49,8 @@ def filter_samples(variations, samples):
     samples_in_variation = variations.samples.compute()
     sample_cols = np.array(sorted(list(samples_in_variation).index(sample) for sample in samples))
 
-    new_variations = Variations(samples=da.from_array(samples))
+    new_variations = Variations(samples=da.from_array(samples),
+                                metadata=variations.metadata)
     for field, array in variations._arrays.items():
         if PUBLIC_CALL_GROUP in field:
             array = array[:, sample_cols]
