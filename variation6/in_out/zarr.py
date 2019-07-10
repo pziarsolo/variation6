@@ -73,7 +73,7 @@ def load_zarr(path):
     return variations
 
 
-def save_zarr(variations, out_path, compute=True):
+def prepare_zarr_storage(variations, out_path):
     store = zarr.DirectoryStore(str(out_path))
     root = zarr.group(store=store, overwrite=True)
     sources = []
@@ -85,7 +85,6 @@ def save_zarr(variations, out_path, compute=True):
                                      object_codec=numcodecs.VLenUTF8())
     sources.append(variations.samples)
     targets.append(samples_ds)
-#     da.to_zarr(variations.samples, samples_ds)
 
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
@@ -106,7 +105,5 @@ def save_zarr(variations, out_path, compute=True):
             dataset.attrs.put(field_metadata)
         sources.append(array)
         targets.append(dataset)
-#         da.to_zarr(array, dataset)
 
-    return da.store(sources, targets, compute=compute)
-
+    return da.store(sources, targets, compute=False)

@@ -1,5 +1,4 @@
 from variation6 import GT_FIELD, MISSING_GT
-from variation6.result import Result
 
 
 def calc_missing_gt(variations, rates=True):
@@ -9,4 +8,4 @@ def calc_missing_gt(variations, rates=True):
     num_missing_gts = bool_gts.sum(axis=(1, 2)) / ploidy
     if rates:
         num_missing_gts = num_missing_gts / gts.shape[1]
-    return Result({'num_missing_gts': num_missing_gts})
+    return {'num_missing_gts': num_missing_gts}

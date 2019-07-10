@@ -4,10 +4,11 @@ import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import dask
 import numpy as np
 
 from variation6 import GT_FIELD, QUAL_FIELD
-from variation6.in_out.zarr import load_zarr, vcf_to_zarr, save_zarr
+from variation6.in_out.zarr import load_zarr, vcf_to_zarr, prepare_zarr_storage
 
 from variation6.tests import TEST_DATA_DIR
 from variation6.variations import ALLOWED_FIELDS
@@ -37,7 +38,8 @@ class TestZarrOut(unittest.TestCase):
 
         with TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
-            save_zarr(variations, tmp_path)
+            delayed_store = prepare_zarr_storage(variations, tmp_path)
+            dask.compute(delayed_store)
             variations2 = load_zarr(tmp_path)
             self.assertTrue(np.all(variations.samples.compute() == variations2.samples.compute()))
             for field in ALLOWED_FIELDS:

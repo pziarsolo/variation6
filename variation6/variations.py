@@ -64,6 +64,8 @@ class Variations:
         return one_mat.shape[0]
 
     def __setitem__(self, key, value):
+        if key == 'samples':
+            self.samples = value
         if key not in ALLOWED_FIELDS:
             raise ValueError(f'Not allowed field {key}')
         # we can not check by shape 0 if array is not computed.
@@ -95,3 +97,6 @@ class Variations:
         for key, array in self._arrays.items():
             variations[key] = array[index, ...]
         return variations
+
+    def items(self):
+        return self._arrays.items()

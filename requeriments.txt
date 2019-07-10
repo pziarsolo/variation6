@@ -1,0 +1,3 @@
+dask[complete]
+scikit-allel
+zarr

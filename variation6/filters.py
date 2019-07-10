@@ -3,9 +3,8 @@ import numpy as np
 
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
-                        FLT_VARS, FLT_STATS)
+                        FLT_VARS)
 from variation6.variations import Variations
-from variation6.result import Result
 from variation6.stats import calc_missing_gt
 
 
@@ -19,7 +18,7 @@ def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
     num_filtered = da.count_nonzero(da.logical_not(selected_vars))
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
-    return Result({FLT_VARS: variations, FLT_STATS: {filter_id: flt_stats}})
+    return {FLT_VARS: variations, filter_id: flt_stats}
 
 
 def _gt_to_missing(variations, field, min_value):
@@ -33,7 +32,7 @@ def _gt_to_missing(variations, field, min_value):
 
     variations[GT_FIELD] = gts
 
-    return Result({FLT_VARS: variations})
+    return {FLT_VARS: variations}
 
 
 def min_depth_gt_to_missing(variations, min_depth):
@@ -55,4 +54,4 @@ def filter_samples(variations, samples):
         if PUBLIC_CALL_GROUP in field:
             array = array[:, sample_cols]
         new_variations[field] = array
-    return Result({FLT_VARS: new_variations})
+    return {FLT_VARS: new_variations}
