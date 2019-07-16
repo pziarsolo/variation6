@@ -92,6 +92,9 @@ class Variations:
 
         return self._arrays.get(key)
 
+    def __contains__(self, lookup):
+        return lookup in self._arrays
+
     def get_vars(self, index):
         variations = Variations(samples=self.samples, metadata=self.metadata)
         for key, array in self._arrays.items():

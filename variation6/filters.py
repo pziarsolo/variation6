@@ -5,7 +5,7 @@ from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
                         FLT_VARS)
 from variation6.variations import Variations
-from variation6.stats import calc_missing_gt
+from variation6.stats import calc_missing_gt, calc_maf_by_allele_count
 
 
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
@@ -55,3 +55,41 @@ def filter_samples(variations, samples):
             array = array[:, sample_cols]
         new_variations[field] = array
     return {FLT_VARS: new_variations}
+
+
+def _select_vars(variations, stats, min_=None, max_=None):
+    selector_max = None if max_ is None else stats <= max_
+    selector_min = None if min_ is None else stats >= min_
+
+    if selector_max is None and selector_min is not None:
+        selected_vars = selector_min
+    elif selector_max is not None and selector_min is None:
+        selected_vars = selector_max
+    elif selector_max is not None and selector_min is not None:
+        selected_vars = selector_min & selector_max
+    else:
+        selected_vars = _filter_no_row(variations)
+
+    variations = variations.get_vars(selected_vars)
+
+    num_selected_vars = da.count_nonzero(selected_vars)
+    num_filtered = da.count_nonzero(da.logical_not(selected_vars))
+
+    flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
+
+    return {FLT_VARS: variations, 'stats': flt_stats }
+
+
+def _filter_no_row(variations):
+    n_snps = variations.num_variations
+    selector = da.ones((n_snps,), dtype=np.bool_)
+    return selector
+
+
+def filter_by_maf(variations, max_maf=None, min_maf=None,
+                  filter_id='filter_by_maf'):
+    mafs = calc_maf_by_allele_count(variations)
+
+    result = _select_vars(variations, mafs, min_maf, max_maf)
+
+    return {FLT_VARS: result[FLT_VARS], filter_id: result['stats']}
