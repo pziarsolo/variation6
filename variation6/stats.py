@@ -36,15 +36,18 @@ def calc_maf_by_allele_count(variations):
     return {'mafs': mafs}
 
 
-def count_alleles(gts, max_alleles=3):
+def count_alleles(gts, max_alleles=3, count_missing=True):
     alleles = list(range(max_alleles))
+    if count_missing:
+        alleles += [MISSING_INT]
     counts = []
     for allele in alleles:
-#         gts_in_mem = gts[:]
         gts_in_mem = allele == gts
         allele_count = np.count_nonzero(gts_in_mem, axis=(1, 2))
+        # print(allele_count)
         counts.append(allele_count.reshape(allele_count.shape[0], 1))
-    return np.stack(counts, axis=2)
+    stacked = np.stack(counts, axis=2)
+    return stacked.reshape(stacked.shape[0], stacked.shape[2])
 
 
 def calc_maf_by_gt(variations, max_alleles=3):
@@ -53,16 +56,49 @@ def calc_maf_by_gt(variations, max_alleles=3):
     chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]), (max_alleles + 1,))
 
     def _count_alleles(gts):
-        return count_alleles(gts, max_alleles)
+        return count_alleles(gts, max_alleles, count_missing=False)
 
 #     count_alleles = partial(_count_alleles, max_alleles)
     # _count_alleles(gts, max_alleles)
     # map blocks and reduce
-    allele_counts_by_snp = da.map_blocks(_count_alleles, gts, chunks=chunks).sum(axis=1, dtype='i4')
+    allele_counts_by_snp = da.map_blocks(_count_alleles, gts, chunks=chunks)  # .sum(axis=1, dtype='i4')
 
-    max_ = da.max(allele_counts_by_snp, axis=1)
-    sum_ = da.sum(allele_counts_by_snp, axis=1)
+    # TODO Need to remove missing gt counts(last column
+    max_ = da.max(allele_counts_by_snp , axis=1)
+    sum_ = da.sum(allele_counts_by_snp , axis=1)
 
     mafs = max_ / sum_
+    # return {'aa': allele_counts_by_snp}
+    return {'mafs': mafs}  # , 'allele_counts': allele_counts_by_snp}
 
-    return {'mafs': mafs}
+
+def _calc_mac(gts, max_alleles=3, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+    gt_counts = count_alleles(gts, max_alleles=max_alleles)
+    if gt_counts is None:
+        return np.array([])
+
+    missing_allele_idx = -1
+    num_missing = np.copy(gt_counts[:, missing_allele_idx])
+    gt_counts[:, missing_allele_idx] = 0
+
+    max_ = np.amax(gt_counts, axis=1)
+    num_samples = gts.shape[1]
+    ploidy = gts.shape[2]
+    num_chroms = num_samples * ploidy
+    mac = num_samples - (num_chroms - num_missing - max_) / ploidy
+
+    # we set the snps with no data to nan
+    mac[max_ == 0] = np.nan
+    return mac
+
+
+def calc_mac(variations, max_alleles=3):
+    gts = variations[GT_FIELD]
+    # determine output chunks - preserve axis0; change axis1, axis2
+    chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]), (max_alleles + 1,))
+
+    def private_calc_mac(gts):
+        return _calc_mac(gts, max_alleles=max_alleles)
+
+    macs = da.map_blocks(private_calc_mac, gts, chunks=chunks, dtype='i4')
+    return {'macs': macs}
