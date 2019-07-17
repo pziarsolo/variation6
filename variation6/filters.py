@@ -5,8 +5,8 @@ from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
                         FLT_VARS)
 from variation6.variations import Variations
-from variation6.stats import calc_missing_gt, calc_maf_by_allele_count, \
-    calc_mac
+from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
+                              calc_mac, calc_maf_by_gt)
 
 
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
@@ -87,10 +87,19 @@ def _filter_no_row(variations):
     return selector
 
 
-def filter_by_maf(variations, remove_above=None, remove_under=None,
-                  filter_id='filter_by_maf'):
+def filter_by_maf_by_allele_count(variations, remove_above=None, remove_under=None,
+                                  filter_id='filter_by_maf_by_allele_count'):
     mafs = calc_maf_by_allele_count(variations)
     # print(compute(mafs))
+    result = _select_vars(variations, mafs['mafs'], remove_under, remove_above)
+
+    return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
+
+
+def filter_by_maf(variations, remove_above=None, remove_under=None,
+                                  filter_id='filter_by_maf'):
+    mafs = calc_maf_by_gt(variations)
+
     result = _select_vars(variations, mafs['mafs'], remove_under, remove_above)
 
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
@@ -104,3 +113,4 @@ def filter_by_mac(variations, remove_above=None, remove_under=None,
     result = _select_vars(variations, macs['macs'], remove_under, remove_above)
 
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats']}
+

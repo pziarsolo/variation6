@@ -53,17 +53,15 @@ def count_alleles(gts, max_alleles=3, count_missing=True):
 def calc_maf_by_gt(variations, max_alleles=3):
     gts = variations[GT_FIELD]
     # determine output chunks - preserve axis0; change axis1, axis2
-    chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]), (max_alleles + 1,))
+    chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]))
 
     def _count_alleles(gts):
         return count_alleles(gts, max_alleles, count_missing=False)
 
-#     count_alleles = partial(_count_alleles, max_alleles)
-    # _count_alleles(gts, max_alleles)
     # map blocks and reduce
-    allele_counts_by_snp = da.map_blocks(_count_alleles, gts, chunks=chunks)  # .sum(axis=1, dtype='i4')
+    allele_counts_by_snp = da.map_blocks(_count_alleles, gts, chunks=chunks,
+                                         drop_axis=(2,))
 
-    # TODO Need to remove missing gt counts(last column
     max_ = da.max(allele_counts_by_snp , axis=1)
     sum_ = da.sum(allele_counts_by_snp , axis=1)
 

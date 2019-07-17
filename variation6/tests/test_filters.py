@@ -8,7 +8,8 @@ from variation6.tests import TEST_DATA_DIR
 from variation6.in_out.zarr import load_zarr
 from variation6.filters import (remove_low_call_rate_vars,
                                 min_depth_gt_to_missing,
-                                filter_samples, filter_by_maf, filter_by_mac)
+                                filter_samples, filter_by_maf_by_allele_count, filter_by_mac,
+    filter_by_maf)
 
 from variation6.compute import compute
 
@@ -69,6 +70,15 @@ class FilterSamplesTest(unittest.TestCase):
 
 
 class MafFilterTest(unittest.TestCase):
+
+    def test_maf_by_allele_count_filter(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        task = filter_by_maf_by_allele_count(variations, remove_above=0.6)
+        result = compute(task, store_variation_to_memory=True)
+        filtered_vars = result[FLT_VARS]
+        self.assertEqual(filtered_vars.num_variations, 4)
+        self.assertEqual(result['filter_by_maf_by_allele_count'], {'n_kept': 4,
+                                                   'n_filtered_out': 3})
 
     def test_maf_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
