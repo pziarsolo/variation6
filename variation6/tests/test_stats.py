@@ -92,7 +92,7 @@ class StatsTest(unittest.TestCase):
         variations[GT_FIELD] = da.from_array(gts)
         macs = calc_mac(variations)
         result = compute(macs)
-        expected = np.array([ 2., 1., 1., math.nan])
+        expected = [2, 1, 1, math.nan]
         for a, b in zip(result['macs'], expected):
             if math.isnan(a):
                 self.assertTrue(math.isnan(b))

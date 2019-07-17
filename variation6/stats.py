@@ -77,7 +77,7 @@ def _calc_mac(gts, max_alleles=3, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_ST
     if gt_counts is None:
         return np.array([])
 
-    missing_allele_idx = -1
+    missing_allele_idx = -1  # it's allways in the last position
     num_missing = np.copy(gt_counts[:, missing_allele_idx])
     gt_counts[:, missing_allele_idx] = 0
 
@@ -95,10 +95,13 @@ def _calc_mac(gts, max_alleles=3, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_ST
 def calc_mac(variations, max_alleles=3):
     gts = variations[GT_FIELD]
     # determine output chunks - preserve axis0; change axis1, axis2
-    chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]), (max_alleles + 1,))
 
-    def private_calc_mac(gts):
+    chunks = (gts.chunks[0])
+
+    def _private_calc_mac(gts):
         return _calc_mac(gts, max_alleles=max_alleles)
 
-    macs = da.map_blocks(private_calc_mac, gts, chunks=chunks, dtype='i4')
+    macs = da.map_blocks(_private_calc_mac, gts, chunks=chunks,
+                         drop_axis=(1, 2), dtype='i4')
+
     return {'macs': macs}
