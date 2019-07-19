@@ -23,6 +23,8 @@ class TestVcfToZarr(unittest.TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 vcf_to_zarr(vcf_path, zarr_path)
+                variations = load_zarr(zarr_path)
+                self.assertEqual(variations.samples.shape[0], 3)
 
     def test_zarr_to_variations(self):
         zarr_path = TEST_DATA_DIR / 'test.zarr'

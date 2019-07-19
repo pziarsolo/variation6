@@ -51,6 +51,9 @@ def vcf_to_zarr(vcf_path, zarr_path, fields=None):
 
     # convert our fields to allele zarr fields
     zarr_fields = [VARIATION_ZARR_FIELD_MAPPING[field] for field in fields]
+    if 'samples' not in zarr_fields:
+        zarr_fields.append('samples')
+
     allel.vcf_to_zarr(str(vcf_path), str(zarr_path), fields=zarr_fields)
 
 
