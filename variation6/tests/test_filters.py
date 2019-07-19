@@ -8,9 +8,9 @@ from variation6.tests import TEST_DATA_DIR
 from variation6.in_out.zarr import load_zarr
 from variation6.filters import (remove_low_call_rate_vars,
                                 min_depth_gt_to_missing,
-                                filter_samples, filter_by_maf_by_allele_count, filter_by_mac,
+                                keep_samples, filter_by_maf_by_allele_count, filter_by_mac,
     filter_by_maf, keep_variable_variations, keep_variations_in_regions,
-    remove_variations_in_regions)
+    remove_variations_in_regions, remove_samples)
 
 from variation6.compute import compute
 from variation6.variations import Variations
@@ -59,15 +59,25 @@ class MinDepthGtToMissing(unittest.TestCase):
 
 class FilterSamplesTest(unittest.TestCase):
 
-    def test_samples_filter(self):
+    def test_keep_samples(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
         samples = ['pepo', 'upv196']
-        task = filter_samples(variations, samples=samples)
+        task = keep_samples(variations, samples=samples)
         processed = compute(task, store_variation_to_memory=True)
         dps = processed[FLT_VARS][DP_FIELD]
         self.assertTrue(np.all(samples == processed[FLT_VARS].samples))
         expected = [[-1, 9], [-1, 8], [-1, 8], [14, 6], [-1, -1], [-1, -1],
                     [-1, 6]]
+        self.assertTrue(np.all(dps == expected))
+
+    def test_remove_samples(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        samples = ['pepo', 'upv196']
+        task = remove_samples(variations, samples=samples)
+        processed = compute(task, store_variation_to_memory=True)
+        dps = processed[FLT_VARS][DP_FIELD]
+        self.assertTrue(np.all(['mu16'] == processed[FLT_VARS].samples))
+        expected = [[10], [9], [9], [-1], [-1], [ 9], [10]]
         self.assertTrue(np.all(dps == expected))
 
 

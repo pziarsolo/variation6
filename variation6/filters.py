@@ -44,10 +44,22 @@ def min_qual_gt_to_missing(variations, min_qual):
     return _gt_to_missing(variations, field=QUAL_FIELD, min_value=min_qual)
 
 
-def filter_samples(variations, samples):
+def keep_samples(variations, samples):
+    return _filter_samples(variations, samples, reverse=False)
+
+
+def remove_samples(variations, samples):
+    return _filter_samples(variations, samples, reverse=True)
+
+
+def _filter_samples(variations, samples, reverse=False):
 
     samples_in_variation = variations.samples.compute()
     sample_cols = np.array(sorted(list(samples_in_variation).index(sample) for sample in samples))
+
+    if reverse:
+        sample_cols = [index for index in range(len(samples_in_variation)) if index not in sample_cols]
+        samples = [sample for index, sample in enumerate(samples_in_variation) if index in sample_cols]
 
     new_variations = Variations(samples=da.from_array(samples),
                                 metadata=variations.metadata)
