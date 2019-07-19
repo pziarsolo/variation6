@@ -36,7 +36,7 @@ def calc_maf_by_allele_count(variations):
     return {'mafs': mafs}
 
 
-def count_alleles(gts, max_alleles=3, count_missing=True):
+def _count_alleles_in_memory(gts, max_alleles=3, count_missing=True):
     alleles = list(range(max_alleles))
     if count_missing:
         alleles += [MISSING_INT]
@@ -50,18 +50,26 @@ def count_alleles(gts, max_alleles=3, count_missing=True):
     return stacked.reshape(stacked.shape[0], stacked.shape[2])
 
 
-def calc_maf_by_gt(variations, max_alleles=3):
-    gts = variations[GT_FIELD]
-    # determine output chunks - preserve axis0; change axis1, axis2
-    chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]))
+def count_alleles(gts, max_alleles=3, count_missing=True):
 
     def _count_alleles(gts):
-        return count_alleles(gts, max_alleles, count_missing=False)
+        return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
 
-    # map blocks and reduce
+    if isinstance(gts, np.ndarray):
+        return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
+
+    chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]))
+
     allele_counts_by_snp = da.map_blocks(_count_alleles, gts, chunks=chunks,
                                          drop_axis=(2,))
 
+    return allele_counts_by_snp
+
+
+def calc_maf_by_gt(variations, max_alleles=3):
+    gts = variations[GT_FIELD]
+
+    allele_counts_by_snp = count_alleles(gts, max_alleles, count_missing=False)
     max_ = da.max(allele_counts_by_snp , axis=1)
     sum_ = da.sum(allele_counts_by_snp , axis=1)
 

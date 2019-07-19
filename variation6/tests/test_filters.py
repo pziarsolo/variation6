@@ -1,5 +1,5 @@
 import unittest
-
+import dask.array as da
 import numpy as np
 
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, FLT_VARS, N_KEPT,
@@ -9,9 +9,10 @@ from variation6.in_out.zarr import load_zarr
 from variation6.filters import (remove_low_call_rate_vars,
                                 min_depth_gt_to_missing,
                                 filter_samples, filter_by_maf_by_allele_count, filter_by_mac,
-    filter_by_maf)
+    filter_by_maf, remove_non_variable_or_all_missing)
 
 from variation6.compute import compute
+from variation6.variations import Variations
 
 
 class MinCallFilterTest(unittest.TestCase):
@@ -73,7 +74,7 @@ class MafFilterTest(unittest.TestCase):
 
     def test_maf_by_allele_count_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        task = filter_by_maf_by_allele_count(variations, remove_above=0.6)
+        task = filter_by_maf_by_allele_count(variations, max_allowable_maf=0.6)
         result = compute(task, store_variation_to_memory=True)
         filtered_vars = result[FLT_VARS]
         self.assertEqual(filtered_vars.num_variations, 4)
@@ -82,7 +83,7 @@ class MafFilterTest(unittest.TestCase):
 
     def test_maf_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        task = filter_by_maf(variations, remove_above=0.6)
+        task = filter_by_maf(variations, max_allowable_maf=0.6)
         result = compute(task, store_variation_to_memory=True)
         filtered_vars = result[FLT_VARS]
         self.assertEqual(filtered_vars.num_variations, 4)
@@ -91,12 +92,34 @@ class MafFilterTest(unittest.TestCase):
 
     def test_mac_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        task = filter_by_mac(variations, remove_above=1)
+        task = filter_by_mac(variations, max_allowable_mac=1)
         result = compute(task, store_variation_to_memory=True)
         filtered_vars = result[FLT_VARS]
         self.assertEqual(filtered_vars.num_variations, 0)
         self.assertEqual(result['filter_by_mac'], {'n_kept': 0,
                                                    'n_filtered_out': 7})
+
+
+class NoVariableOrMissingTest(unittest.TestCase):
+
+    def test_non_variable_filter(self):
+        variations = Variations(samples=da.array(['aa', 'bb']))
+
+        gts = np.array([[[0, 0], [0, 0]],
+                        [[0, 2], [1, -1]],
+                        [[0, 0], [1, 1]],
+                        [[-1, -1], [-1, -1]]
+                       ])
+        variations[GT_FIELD] = da.from_array(gts)
+
+        task = remove_non_variable_or_all_missing(variations, max_alleles=3)
+
+        result = compute(task, store_variation_to_memory=True)
+
+        filtered_vars = result[FLT_VARS]
+        self.assertEqual(filtered_vars.num_variations, 2)
+        self.assertEqual(result['remove_no_variable_or_all_missing'], {'n_kept': 2,
+                                                                   'n_filtered_out': 2})
 
 
 if __name__ == '__main__':
