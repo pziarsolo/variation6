@@ -3,7 +3,7 @@ import numpy as np
 
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
-                        FLT_VARS)
+                        FLT_VARS, CHROM_FIELD, POS_FIELD)
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_mac, calc_maf_by_gt, count_alleles)
@@ -116,8 +116,8 @@ def filter_by_mac(variations, max_allowable_mac=None, min_allowable_mac=None,
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats']}
 
 
-def remove_non_variable_or_all_missing(variations, max_alleles,
-                                   filter_id='remove_no_variable_or_all_missing'):
+def keep_variable_variations(variations, max_alleles,
+                                   filter_id='variable_variations'):
     gts = variations[GT_FIELD]
     some_not_missing_gts = da.any(gts != MISSING_INT, axis=2)
     selected_vars1 = da.any(some_not_missing_gts, axis=1)
@@ -136,3 +136,50 @@ def remove_non_variable_or_all_missing(variations, max_alleles,
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
     return {FLT_VARS: selected_variations, filter_id: flt_stats}
+
+
+def keep_variations_in_regions(variations, regions,
+                               filter_id='keep_variations_in_regions'):
+    return _filter_by_snp_position(variations, regions, filter_id, reverse=False)
+
+
+def remove_variations_in_regions(variations, regions,
+                                 filter_id='remove_variations_in_regions'):
+    return _filter_by_snp_position(variations, regions, filter_id, reverse=True)
+
+
+def _select_variations_in_region(variations, regions):
+    chroms = variations[CHROM_FIELD]
+    poss = variations[POS_FIELD]
+
+    in_any_region = None
+    for region in regions:
+        desired_chrom = region[0]
+        if isinstance(desired_chrom, (tuple, list)):
+            raise ValueError('Malformed region: ' + str(region))
+        in_this_region = chroms[:] == desired_chrom
+        if len(region) > 1:
+            in_this_region = da.logical_and(in_this_region,
+                                            da.logical_and(region[1] <= poss, poss < region[2]))
+        if in_any_region is None:
+            in_any_region = in_this_region
+        else:
+            in_any_region = da.logical_or(in_any_region, in_this_region)
+
+    return in_any_region
+
+
+def _filter_by_snp_position(variations, regions, filter_id, reverse=False):
+    selected_vars = _select_variations_in_region(variations, regions)
+    if reverse:
+        selected_vars = da.logical_not(selected_vars)
+
+    selected_variations = variations.get_vars(selected_vars)
+
+    num_selected_vars = da.count_nonzero(selected_vars)
+    num_filtered = da.count_nonzero(da.logical_not(selected_vars))
+
+    flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
+
+    return {FLT_VARS: selected_variations, filter_id: flt_stats}
+
