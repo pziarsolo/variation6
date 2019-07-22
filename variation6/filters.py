@@ -6,7 +6,8 @@ from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         FLT_VARS, CHROM_FIELD, POS_FIELD)
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
-                              calc_mac, calc_maf_by_gt, count_alleles)
+                              calc_mac, calc_maf_by_gt, count_alleles,
+    calc_obs_het)
 
 
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
@@ -194,4 +195,20 @@ def _filter_by_snp_position(variations, regions, filter_id, reverse=False):
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
     return {FLT_VARS: selected_variations, filter_id: flt_stats}
+
+
+def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
+                                min_allowable_het=None,
+                                min_allowable_call_dp=None,
+                                max_allowable_call_dp=None,
+                                filter_id='obs_het'):
+
+    obs_het = calc_obs_het(variations,
+                           min_allowable_call_dp=min_allowable_call_dp,
+                           max_allowable_call_dp=max_allowable_call_dp)
+
+    result = _select_vars(variations, obs_het['obs_het'], min_allowable_het,
+                          max_allowable_het)
+
+    return {FLT_VARS: result[FLT_VARS], filter_id: result['stats']}
 

@@ -8,9 +8,11 @@ from variation6.tests import TEST_DATA_DIR
 from variation6.in_out.zarr import load_zarr
 from variation6.filters import (remove_low_call_rate_vars,
                                 min_depth_gt_to_missing,
-                                keep_samples, filter_by_maf_by_allele_count, filter_by_mac,
-    filter_by_maf, keep_variable_variations, keep_variations_in_regions,
-    remove_variations_in_regions, remove_samples)
+                                keep_samples, filter_by_maf_by_allele_count,
+                                filter_by_mac, filter_by_maf,
+                                keep_variable_variations,
+                                keep_variations_in_regions,
+                                remove_variations_in_regions, remove_samples)
 
 from variation6.compute import compute
 from variation6.variations import Variations
@@ -37,6 +39,20 @@ class MinCallFilterTest(unittest.TestCase):
         self.assertEqual(gts.shape, (2, 3, 2))
         self.assertTrue(np.all(processed[FLT_VARS].samples == variations.samples.compute()))
         self.assertEqual(processed[FLT_VARS].metadata, variations.metadata)
+
+    def test_filter_by_call_rate_twice(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        pipeline_futures = {}
+        # this rate has no sense but I use to remove all calls
+        future_result = remove_low_call_rate_vars(variations, min_call_rate=1.1)
+        pipeline_futures.update(future_result)
+
+        future_result2 = remove_low_call_rate_vars(future_result[FLT_VARS], min_call_rate=0.5,
+                                           filter_id='call_rate2')
+        pipeline_futures.update(future_result2)
+
+        processed = compute(pipeline_futures, store_variation_to_memory=True)
+        self.assertEqual(processed['call_rate2'], {'n_kept': 0, 'n_filtered_out': 0})
 
 
 class MinDepthGtToMissing(unittest.TestCase):
@@ -97,6 +113,7 @@ class MafFilterTest(unittest.TestCase):
         task = filter_by_maf(variations, max_allowable_maf=0.6)
         result = compute(task, store_variation_to_memory=True)
         filtered_vars = result[FLT_VARS]
+
         self.assertEqual(filtered_vars.num_variations, 4)
         self.assertEqual(result['filter_by_maf'], {'n_kept': 4,
                                                    'n_filtered_out': 3})

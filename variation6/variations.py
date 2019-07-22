@@ -1,7 +1,8 @@
 import math
 import numpy as np
 
-from variation6 import VARIATION_FIELDS, CALL_FIELDS, PUBLIC_CALL_GROUP
+from variation6 import VARIATION_FIELDS, CALL_FIELDS, PUBLIC_CALL_GROUP, \
+    GT_FIELD, EmptyVariationsError
 
 ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
 
@@ -16,6 +17,13 @@ class Variations:
         self._metadata = {}
 
         self.metadata = metadata
+
+    @property
+    def ploidy(self):
+        try:
+            return self[GT_FIELD].shape[2]
+        except (KeyError, IndexError):
+            raise EmptyVariationsError('Variations without genotype data')
 
     @property
     def metadata(self):
@@ -66,6 +74,9 @@ class Variations:
     def __setitem__(self, key, value):
         if key == 'samples':
             self.samples = value
+#         if value.shape == (0,):
+#             print('data is empty')
+
         if key not in ALLOWED_FIELDS:
             raise ValueError(f'Not allowed field {key}')
         # we can not check by shape 0 if array is not computed.
@@ -80,7 +91,7 @@ class Variations:
                 msg = "Can not set call data if samples are not defined"
                 raise ValueError(msg)
             if (not math.isnan(self.num_samples) and self.num_samples != 0
-                    and self.num_samples != value.shape[1]):
+                    and value.ndim > 1 and self.num_samples != value.shape[1]):
                 msg = 'Shape of the array does not fit with num samples'
                 raise ValueError(msg)
 

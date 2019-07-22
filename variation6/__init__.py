@@ -45,3 +45,7 @@ FLT_STATS = 'flt_stats'
 N_KEPT = 'n_kept'
 N_FILTERED_OUT = 'n_filtered_out'
 TOT = 'tot'
+
+
+class EmptyVariationsError(Exception):
+    pass

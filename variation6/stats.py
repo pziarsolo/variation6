@@ -2,14 +2,14 @@ import dask.array as da
 import numpy as np
 
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
-                        RO_FIELD, AD_FIELD)
+                        RO_FIELD, DP_FIELD, EmptyVariationsError)
 
 MIN_NUM_GENOTYPES_FOR_POP_STAT = 2
 
 
 def calc_missing_gt(variations, rates=True):
     gts = variations[GT_FIELD]
-    ploidy = gts.shape[2]
+    ploidy = variations.ploidy
     bool_gts = gts == MISSING_GT
     num_missing_gts = bool_gts.sum(axis=(1, 2)) / ploidy
     if rates:
@@ -18,18 +18,21 @@ def calc_missing_gt(variations, rates=True):
 
 
 def calc_maf_by_allele_count(variations):
-    if AD_FIELD in variations:
-        allele_counts = variations[AD_FIELD]
-    else:
-        ro = variations[RO_FIELD]
-        ro = ro.reshape(ro.shape[0], ro.shape[1], 1)
-        allele_counts = da.concatenate([ro, variations[AO_FIELD]], axis=2)
+    ro = variations[RO_FIELD]
+    ao = variations[AO_FIELD]
 
-    allele_counts[allele_counts == MISSING_INT ] = 0
-    allele_counts_by_snp = da.sum(allele_counts, axis=1)
+    ro[ro == MISSING_INT] = 0
+    ao[ao == MISSING_INT] = 0
 
-    max_ = da.max(allele_counts_by_snp, axis=1)
-    sum_ = da.sum(allele_counts_by_snp, axis=1)
+    ro_sum = da.sum(ro, axis=1)
+    ao_sum = da.sum(ao, axis=1)
+
+    max_ = da.sum(ao, axis=1).max(axis=1)
+
+    sum_ = ao_sum.sum(axis=1) + ro_sum
+
+    # we modify the max_ to update the values that are bigger in ro
+    max_[ro_sum > max_] = ro_sum
 
     mafs = max_ / sum_
 
@@ -56,9 +59,14 @@ def count_alleles(gts, max_alleles=3, count_missing=True):
         return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
 
     if isinstance(gts, np.ndarray):
-        return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
-
-    chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]))
+        try:
+            return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
+        except np.AxisError:
+            raise EmptyVariationsError()
+    try:
+        chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]))
+    except IndexError:
+        raise EmptyVariationsError()
 
     allele_counts_by_snp = da.map_blocks(_count_alleles, gts, chunks=chunks,
                                          drop_axis=(2,))
@@ -111,3 +119,58 @@ def calc_mac(variations, max_alleles=3):
                          drop_axis=(1, 2), dtype='i4')
 
     return {'macs': macs}
+
+
+def _call_is_hom_in_memory(gts):
+    is_hom = da.full(gts.shape[:-1], True, dtype=np.bool)
+    for idx in range(1, gts.shape[2]):
+        is_hom = da.logical_and(gts[:, :, idx] == gts[:, :, idx - 1],
+                                   is_hom)
+    return is_hom
+
+
+def _call_is_hom(variations, is_missing=None):
+    gts = variations[GT_FIELD]
+
+    is_hom = da.map_blocks(_call_is_hom_in_memory, gts, drop_axis=2)
+    is_hom[is_missing] = False
+    return is_hom
+
+
+def _call_is_het(variations, min_call_dp, max_call_dp=None, is_missing=None):
+    is_hom = _call_is_hom(variations, is_missing=is_missing)
+#     if is_hom.shape[0] == 0:
+#         return is_hom, is_missing
+    is_het = da.logical_not(is_hom)
+    is_het[is_missing] = False
+    return is_het
+
+
+def _calc_obs_het_counts(variations, axis, min_call_dp, max_call_dp=None):
+    is_missing = da.any(variations[GT_FIELD] == MISSING_INT, axis=2)
+
+    if min_call_dp or max_call_dp:
+        dps = variations[DP_FIELD]
+        if min_call_dp:
+            low_dp = dps < min_call_dp
+            is_missing = da.logical_or(is_missing, low_dp)
+        if max_call_dp:
+            high_dp = dps > max_call_dp
+            is_missing = da.logical_or(is_missing, high_dp)
+    is_het = _call_is_het(variations, min_call_dp, max_call_dp,
+                          is_missing=is_missing)
+#     if is_het.shape[0] == 0:
+#         return is_het, is_missing
+    return (da.sum(is_het, axis=axis),
+            da.sum(da.logical_not(is_missing), axis=axis))
+
+
+def calc_obs_het(variations, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
+                 min_allowable_call_dp=0, max_allowable_call_dp=None):
+    het, called_gts = _calc_obs_het_counts(variations, axis=1,
+                                           min_call_dp=min_allowable_call_dp,
+                                           max_call_dp=max_allowable_call_dp)
+    # To avoid problems with NaNs
+    with np.errstate(invalid='ignore'):
+        het = het / called_gts
+    return {'obs_het': het}
