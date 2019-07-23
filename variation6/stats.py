@@ -111,12 +111,12 @@ def calc_mac(variations, max_alleles):
     # determine output chunks - preserve axis0; change axis1, axis2
 
     chunks = (gts.chunks[0])
-
+    chunks=None
     def _private_calc_mac(gts):
         return _calc_mac(gts, max_alleles=max_alleles)
 
     macs = da.map_blocks(_private_calc_mac, gts, chunks=chunks,
-                         drop_axis=(1, 2), dtype='i4')
+                         drop_axis=(1, 2), dtype=np.float64)
 
     return {'macs': macs}
 

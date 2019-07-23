@@ -1,7 +1,9 @@
 import allel
 import dask.array as da
+import numpy as np
 import zarr
 import numcodecs
+import os.path
 
 from variation6 import (CHROM_FIELD, POS_FIELD, ID_FIELD, REF_FIELD, ALT_FIELD,
                         QUAL_FIELD, GT_FIELD, GQ_FIELD, DP_FIELD, AO_FIELD,
@@ -79,34 +81,36 @@ def load_zarr(path):
 def prepare_zarr_storage(variations, out_path):
     store = zarr.DirectoryStore(str(out_path))
     root = zarr.group(store=store, overwrite=True)
-    sources = []
-    targets = []
+    delayed_datasets = []
     metadata = variations.metadata
     # samples
-    samples_ds = root.create_dataset('samples', shape=variations.samples.shape,
-                                     dtype=variations.samples.dtype,
-                                     object_codec=numcodecs.VLenUTF8())
-    sources.append(variations.samples)
-    targets.append(samples_ds)
+    # variants = root.create_group('samples', overwrite=True)
+    dataset = da.to_zarr(variations.samples, url=str(out_path),
+                         compute=False, component='/samples',
+                         object_codec=numcodecs.VLenUTF8())
+    delayed_datasets.append(dataset)
 
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
     for field, definition in ALLELE_ZARR_DEFINITION_MAPPINGS.items():
+        print(field)
         field_metadata = metadata.get(field, None)
         array = variations[field]
         if array is None:
             continue
         group_name = definition['group']
         group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
-        dtype = array.dtype
-        if dtype == object:
-            dtype = 'str'
-        dataset = group.create_dataset(definition['field'],
-                                       shape=array.shape,
-                                       dtype=dtype)
+        kwargs = {}
+        if array.dtype == object:
+            object_codec=numcodecs.VLenUTF8()
+            kwargs = {'object_codec': object_codec}
+
+        path = os.path.sep + os.path.join(group.path, definition['field'])
+        dataset = da.to_zarr(array, url=str(out_path), compute=False,
+                             component=path, **kwargs)
+
         if field_metadata:
             dataset.attrs.put(field_metadata)
-        sources.append(array)
-        targets.append(dataset)
+        delayed_datasets.append(dataset)
 
-    return da.store(sources, targets, compute=False)
+    return delayed_datasets
