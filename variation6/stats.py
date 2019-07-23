@@ -39,7 +39,7 @@ def calc_maf_by_allele_count(variations):
     return {'mafs': mafs}
 
 
-def _count_alleles_in_memory(gts, max_alleles=3, count_missing=True):
+def _count_alleles_in_memory(gts, max_alleles, count_missing=True):
     alleles = list(range(max_alleles))
     if count_missing:
         alleles += [MISSING_INT]
@@ -53,7 +53,7 @@ def _count_alleles_in_memory(gts, max_alleles=3, count_missing=True):
     return stacked.reshape(stacked.shape[0], stacked.shape[2])
 
 
-def count_alleles(gts, max_alleles=3, count_missing=True):
+def count_alleles(gts, max_alleles, count_missing=True):
 
     def _count_alleles(gts):
         return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
@@ -74,7 +74,7 @@ def count_alleles(gts, max_alleles=3, count_missing=True):
     return allele_counts_by_snp
 
 
-def calc_maf_by_gt(variations, max_alleles=3):
+def calc_maf_by_gt(variations, max_alleles):
     gts = variations[GT_FIELD]
 
     allele_counts_by_snp = count_alleles(gts, max_alleles, count_missing=False)
@@ -86,7 +86,7 @@ def calc_maf_by_gt(variations, max_alleles=3):
     return {'mafs': mafs}  # , 'allele_counts': allele_counts_by_snp}
 
 
-def _calc_mac(gts, max_alleles=3, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+def _calc_mac(gts, max_alleles, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
     gt_counts = count_alleles(gts, max_alleles=max_alleles)
     if gt_counts is None:
         return np.array([])
@@ -106,7 +106,7 @@ def _calc_mac(gts, max_alleles=3, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_ST
     return mac
 
 
-def calc_mac(variations, max_alleles=3):
+def calc_mac(variations, max_alleles):
     gts = variations[GT_FIELD]
     # determine output chunks - preserve axis0; change axis1, axis2
 

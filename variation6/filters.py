@@ -118,9 +118,9 @@ def filter_by_maf_by_allele_count(variations, max_allowable_maf=None, min_allowa
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
 
 
-def filter_by_maf(variations, max_allowable_maf=None, min_allowable_maf=None,
-                                  filter_id='filter_by_maf'):
-    mafs = calc_maf_by_gt(variations)
+def filter_by_maf(variations, max_alleles, max_allowable_maf=None, min_allowable_maf=None,
+                  filter_id='filter_by_maf',):
+    mafs = calc_maf_by_gt(variations, max_alleles=max_alleles)
 
     result = _select_vars(variations, mafs['mafs'], min_allowable_maf,
                           max_allowable_maf)
@@ -128,9 +128,9 @@ def filter_by_maf(variations, max_allowable_maf=None, min_allowable_maf=None,
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
 
 
-def filter_by_mac(variations, max_allowable_mac=None, min_allowable_mac=None,
+def filter_by_mac(variations, max_alleles, max_allowable_mac=None, min_allowable_mac=None,
                   filter_id='filter_by_mac'):
-    macs = calc_mac(variations)
+    macs = calc_mac(variations, max_alleles=max_alleles)
     # print(compute(macs))
 
     result = _select_vars(variations, macs['macs'], min_allowable_mac, max_allowable_mac)
