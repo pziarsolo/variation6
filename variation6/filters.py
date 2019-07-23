@@ -23,13 +23,22 @@ def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
     return {FLT_VARS: variations, filter_id: flt_stats}
 
 
+def stack_in_memory(array, axis):
+    return np.stack([array, array], axis)
+
+
 def _gt_to_missing(variations, field, min_value):
     gts = variations[GT_FIELD]
     calls_setted_to_missing = variations[field] < min_value
+    axis = 2
+
+    def _stack_in_memory(array):
+        return stack_in_memory(array, axis=axis)
 
     # as we can not slice using arrays of diferente dimensions, we need to
     # create one with same dimensions with stack
-    p2 = da.stack([calls_setted_to_missing, calls_setted_to_missing], axis=2)
+    p2 = da.map_blocks(_stack_in_memory, calls_setted_to_missing, dtype='i4',
+                       new_axis=2)
     gts[p2] = MISSING_INT
 
     variations[GT_FIELD] = gts

@@ -59,6 +59,7 @@ class MinDepthGtToMissing(unittest.TestCase):
 
     def test_min_depth_gt_to_missing(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
         depth = 9
         prev_gts = variations[GT_FIELD].compute()
         depths = variations[DP_FIELD].compute()
