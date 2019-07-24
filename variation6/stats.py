@@ -110,8 +110,9 @@ def calc_mac(variations, max_alleles):
     gts = variations[GT_FIELD]
     # determine output chunks - preserve axis0; change axis1, axis2
 
-    chunks = (gts.chunks[0])
-    chunks=None
+#     chunks = (gts.chunks[0])
+    chunks = None
+
     def _private_calc_mac(gts):
         return _calc_mac(gts, max_alleles=max_alleles)
 

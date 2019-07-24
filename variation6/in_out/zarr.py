@@ -1,6 +1,5 @@
 import allel
 import dask.array as da
-import numpy as np
 import zarr
 import numcodecs
 import os.path
@@ -102,7 +101,7 @@ def prepare_zarr_storage(variations, out_path):
         group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
         kwargs = {}
         if array.dtype == object:
-            object_codec=numcodecs.VLenUTF8()
+            object_codec = numcodecs.VLenUTF8()
             kwargs = {'object_codec': object_codec}
 
         path = os.path.sep + os.path.join(group.path, definition['field'])
