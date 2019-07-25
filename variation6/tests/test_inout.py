@@ -35,7 +35,7 @@ class TestVcfToZarr(unittest.TestCase):
 
 class TestZarrOut(unittest.TestCase):
 
-    def xtest_save_to_zarr(self):
+    def test_save_to_zarr(self):
         zarr_path = TEST_DATA_DIR / 'test.zarr'
         variations = load_zarr(zarr_path)
         # with this step we create a  variation with dask arrays of unknown shapes
@@ -107,5 +107,5 @@ class Testhdf5Out(unittest.TestCase):
 
 
 if __name__ == '__main__':
-#     import sys; sys.argv = ['.', 'Testhdf5Out']
+    import sys; sys.argv = ['.', 'TestZarrOut']
     unittest.main()

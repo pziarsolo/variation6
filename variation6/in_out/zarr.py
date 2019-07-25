@@ -9,6 +9,8 @@ from variation6 import (CHROM_FIELD, POS_FIELD, ID_FIELD, REF_FIELD, ALT_FIELD,
                         RO_FIELD, AD_FIELD)
 from variation6.variations import Variations
 
+DEFAULT_VARIATION_NUM_IN_CHUNK = 40000
+
 ZARR_CHROM_FIELD_NAME = 'CHROM'
 ZARR_POS_FIELD_NAME = 'POS'
 ZARR_ID_FIELD_NAME = 'ID'
@@ -72,12 +74,14 @@ def load_zarr(path):
             if array.attrs:
                 metadata[field] = dict(array.attrs.items())
 
-            variations[field] = da.from_zarr(array)
+            chunks = (DEFAULT_VARIATION_NUM_IN_CHUNK,) + array.shape[1:]
+
+            variations[field] = da.from_zarr(array, chunks=chunks)
     variations.metadata = metadata
     return variations
 
 
-def prepare_zarr_storage(variations, out_path):
+def prepare_zarr_storage_old(variations, out_path):
     store = zarr.DirectoryStore(str(out_path))
     root = zarr.group(store=store, overwrite=True)
     delayed_datasets = []
@@ -92,7 +96,6 @@ def prepare_zarr_storage(variations, out_path):
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
     for field, definition in ALLELE_ZARR_DEFINITION_MAPPINGS.items():
-        print(field)
         field_metadata = metadata.get(field, None)
         array = variations[field]
         if array is None:
@@ -113,3 +116,70 @@ def prepare_zarr_storage(variations, out_path):
         delayed_datasets.append(dataset)
 
     return delayed_datasets
+
+
+def prepare_zarr_storage(variations, out_path):
+    store = zarr.DirectoryStore(str(out_path))
+    root = zarr.group(store=store, overwrite=True)
+    metadata = variations.metadata
+    sources = []
+    targets = []
+
+    sources.append(variations.samples)
+    targets.append(LazyZarrArray(url=store, path='samples'))
+
+    variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
+    calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
+    for field, definition in ALLELE_ZARR_DEFINITION_MAPPINGS.items():
+        field_metadata = metadata.get(field, None)
+        array = variations[field]
+        if array is None:
+            continue
+        sources.append(array)
+
+        group_name = definition['group']
+        group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
+        path = os.path.sep + os.path.join(group.path, definition['field'])
+        targets.append(LazyZarrArray(url=store, path=path,
+                       attrs=field_metadata))
+
+    return da.store(sources, targets, compute=False)
+
+
+class LazyZarrArray():
+
+    def __init__(self, url, path, attrs=None):
+        # create_dataset
+        self._url = url
+        self._path = path
+        self._dataset = None
+        self._attrs = attrs
+
+    def __setitem__(self, index, chunk):
+
+        if self._dataset is None:
+            if not chunk.size:
+                return
+            object_codec = None
+            if chunk.dtype == object:
+                object_codec = numcodecs.VLenUTF8()
+
+            shape = (0,) + chunk.shape[1:]
+
+            self._dataset = zarr.create(shape=shape,
+                                        chunks=chunk.shape,
+                                        path=self._path,
+                                        store=self._url,
+                                        object_codec=object_codec,
+                                        dtype=chunk.dtype)
+
+            if self._attrs is not None:
+                for key, value in self._attrs.items():
+                    self._dataset.attrs[key] = value
+        if self._dataset.shape[1:] != chunk.shape[1:]:
+            raise ValueError(f'dataset shape and chunk shape differ: {self._dataset.shape} = {chunk.shape}')
+
+        print(self._dataset.shape[0], index[0].start)
+        # assert self._dataset.shape[0] == index[0].start
+
+        self._dataset.append(chunk)

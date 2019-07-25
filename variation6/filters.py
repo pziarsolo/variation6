@@ -191,13 +191,17 @@ def _select_variations_in_region(variations, regions):
     return in_any_region
 
 
+def fake_filter(variations):
+    return {FLT_VARS: variations}
+
+
 def _filter_by_snp_position(variations, regions, filter_id, reverse=False):
     selected_vars = _select_variations_in_region(variations, regions)
     if reverse:
         selected_vars = da.logical_not(selected_vars)
 
     selected_variations = variations.get_vars(selected_vars)
-
+#     print('sel', selected_variations.shape)
     num_selected_vars = da.count_nonzero(selected_vars)
     num_filtered = da.count_nonzero(da.logical_not(selected_vars))
 

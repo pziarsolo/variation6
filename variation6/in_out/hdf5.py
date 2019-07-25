@@ -103,6 +103,10 @@ class LazyH5Dataset():
             chunk = self._mapper(chunk)
 
         filled_index = []
+        print(self._path)
+        print(index)
+        print(chunk.shape)
+        print(chunk)
         for dim_slice, dim_size in zip(index, chunk.shape):
             start = dim_slice.start
             stop = start + dim_size
