@@ -34,14 +34,14 @@ class StatsTest(unittest.TestCase):
                         [[0, 0], [1, 1]],
                         [[-1, -1], [-1, -1]]
                        ])
-        counts = count_alleles(gts)
+        counts = count_alleles(gts, max_alleles=3)
         expected = np.array([[1, 0, 1, 2], [1, 1, 1, 1], [2, 2, 0, 0], [0, 0, 0, 4]])
         self.assertTrue(np.all(counts == expected))
 
     def test_allele_count_dask(self):
         variations = _create_dask_variations()
         gts = variations[GT_FIELD]
-        counts = count_alleles(gts)
+        counts = count_alleles(gts, max_alleles=3)
         expected = [[2, 2, 0, 2], [2, 2, 0, 2], [2, 2, 0, 2], [3, 1, 0, 2, ],
                     [0, 0, 0, 6], [1, 1, 0, 4], [1, 3, 0, 2]]
         self.assertTrue(np.all(expected == counts.compute()))
@@ -49,11 +49,11 @@ class StatsTest(unittest.TestCase):
     def test_empty_gt_allele_count(self):
         gts = np.array([])
         with self.assertRaises(EmptyVariationsError):
-            count_alleles(gts)
+            count_alleles(gts, max_alleles=3)
 
         variations = _create_empty_dask_variations()
         gts = variations[GT_FIELD]
-        task = count_alleles(gts)
+        task = count_alleles(gts, max_alleles=3)
         counts = task.compute()
         self.assertEqual(counts.shape, (0, 4))
 
@@ -117,7 +117,7 @@ class StatsTest(unittest.TestCase):
         # shapes
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
 
-        mafs = calc_maf_by_gt(variations)
+        mafs = calc_maf_by_gt(variations, max_alleles=3)
         result = compute(mafs)
 
         expected = [0.5, 0.33333333, 0.5, math.nan]
@@ -140,7 +140,7 @@ class StatsTest(unittest.TestCase):
         # shapes
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
 
-        macs = calc_mac(variations)
+        macs = calc_mac(variations, max_alleles=3)
         result = compute(macs)
         expected = [2, 1, 1, math.nan]
         for a, b in zip(result['macs'], expected):

@@ -179,7 +179,7 @@ class LazyZarrArray():
         if self._dataset.shape[1:] != chunk.shape[1:]:
             raise ValueError(f'dataset shape and chunk shape differ: {self._dataset.shape} = {chunk.shape}')
 
-        print(self._dataset.shape[0], index[0].start)
-        # assert self._dataset.shape[0] == index[0].start
+#         print(self._dataset.shape[0], index[0].start)
+#         assert self._dataset.shape[0] == index[0].start
 
         self._dataset.append(chunk)
