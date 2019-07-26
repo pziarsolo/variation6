@@ -91,7 +91,8 @@ class StatsTest(unittest.TestCase):
         # shapes
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
 
-        future_result = calc_maf_by_allele_count(variations)
+        future_result = calc_maf_by_allele_count(variations,
+                                                 min_num_genotypes=0)
         result = compute(future_result)
 
         expected = [0.5, 0.5, 0.47619048]
@@ -117,7 +118,8 @@ class StatsTest(unittest.TestCase):
         # shapes
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
 
-        mafs = calc_maf_by_gt(variations, max_alleles=3)
+        mafs = calc_maf_by_gt(variations, max_alleles=3,
+                              min_num_genotypes=0)
         result = compute(mafs)
 
         expected = [0.5, 0.33333333, 0.5, math.nan]
@@ -140,7 +142,7 @@ class StatsTest(unittest.TestCase):
         # shapes
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
 
-        macs = calc_mac(variations, max_alleles=3)
+        macs = calc_mac(variations, max_alleles=3, min_num_genotypes=0)
         result = compute(macs)
         expected = [2, 1, 1, math.nan]
         for a, b in zip(result['macs'], expected):

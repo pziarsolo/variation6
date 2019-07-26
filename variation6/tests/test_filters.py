@@ -115,9 +115,9 @@ class MafFilterTest(unittest.TestCase):
         result = compute(task, store_variation_to_memory=True)
         filtered_vars = result[FLT_VARS]
 
-        self.assertEqual(filtered_vars.num_variations, 4)
-        self.assertEqual(result['filter_by_maf'], {'n_kept': 4,
-                                                   'n_filtered_out': 3})
+        self.assertEqual(filtered_vars.num_variations, 3)
+        self.assertEqual(result['filter_by_maf'], {'n_kept': 3,
+                                                   'n_filtered_out': 4})
 
     def test_mac_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')

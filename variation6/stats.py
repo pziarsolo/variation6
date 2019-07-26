@@ -17,7 +17,8 @@ def calc_missing_gt(variations, rates=True):
     return {'num_missing_gts': num_missing_gts}
 
 
-def calc_maf_by_allele_count(variations):
+def calc_maf_by_allele_count(variations,
+                             min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
     ro = variations[RO_FIELD]
     ao = variations[AO_FIELD]
 
@@ -36,7 +37,7 @@ def calc_maf_by_allele_count(variations):
 
     mafs = max_ / sum_
 
-    return {'mafs': mafs}
+    return {'mafs': _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)}
 
 
 def _count_alleles_in_memory(gts, max_alleles, count_missing=True):
@@ -74,7 +75,8 @@ def count_alleles(gts, max_alleles, count_missing=True):
     return allele_counts_by_snp
 
 
-def calc_maf_by_gt(variations, max_alleles):
+def calc_maf_by_gt(variations, max_alleles,
+                   min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
     gts = variations[GT_FIELD]
 
     allele_counts_by_snp = count_alleles(gts, max_alleles, count_missing=False)
@@ -83,10 +85,10 @@ def calc_maf_by_gt(variations, max_alleles):
 
     mafs = max_ / sum_
     # return {'aa': allele_counts_by_snp}
-    return {'mafs': mafs}  # , 'allele_counts': allele_counts_by_snp}
+    return {'mafs': _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)}  # , 'allele_counts': allele_counts_by_snp}
 
 
-def _calc_mac(gts, max_alleles, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+def _calc_mac(gts, max_alleles):
     gt_counts = count_alleles(gts, max_alleles=max_alleles)
     if gt_counts is None:
         return np.array([])
@@ -106,7 +108,8 @@ def _calc_mac(gts, max_alleles, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT
     return mac
 
 
-def calc_mac(variations, max_alleles):
+def calc_mac(variations, max_alleles,
+             min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
     gts = variations[GT_FIELD]
     # determine output chunks - preserve axis0; change axis1, axis2
 
@@ -119,7 +122,7 @@ def calc_mac(variations, max_alleles):
     macs = da.map_blocks(_private_calc_mac, gts, chunks=chunks,
                          drop_axis=(1, 2), dtype=np.float64)
 
-    return {'macs': macs}
+    return {'macs':  _mask_stats_with_few_samples(macs, variations, min_num_genotypes)}
 
 
 def _call_is_hom_in_memory(gts):
@@ -138,7 +141,7 @@ def _call_is_hom(variations, is_missing=None):
     return is_hom
 
 
-def _call_is_het(variations, min_call_dp, max_call_dp=None, is_missing=None):
+def _call_is_het(variations, is_missing=None):
     is_hom = _call_is_hom(variations, is_missing=is_missing)
 #     if is_hom.shape[0] == 0:
 #         return is_hom, is_missing
@@ -158,8 +161,7 @@ def _calc_obs_het_counts(variations, axis, min_call_dp, max_call_dp=None):
         if max_call_dp:
             high_dp = dps > max_call_dp
             is_missing = da.logical_or(is_missing, high_dp)
-    is_het = _call_is_het(variations, min_call_dp, max_call_dp,
-                          is_missing=is_missing)
+    is_het = _call_is_het(variations, is_missing=is_missing)
 #     if is_het.shape[0] == 0:
 #         return is_het, is_missing
     return (da.sum(is_het, axis=axis),
@@ -174,4 +176,34 @@ def calc_obs_het(variations, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
     # To avoid problems with NaNs
     with np.errstate(invalid='ignore'):
         het = het / called_gts
-    return {'obs_het': het}
+
+    return {'obs_het': _mask_stats_with_few_samples(het, variations, min_num_genotypes)}
+
+
+def calc_called_gt(variations, rates=True):
+
+    if rates:
+        missing = calc_missing_gt(variations, rates=rates)
+        return 1 - missing
+    else:
+        ploidy = variations.ploidy
+        bool_gts = variations[GT_FIELD] != MISSING_GT
+        return bool_gts.sum(axis=(1, 2)) / ploidy
+
+
+def _get_mask_for_masking_samples_with_few_gts(variations, min_num_genotypes,
+                                               num_called_gts=None):
+    if num_called_gts is None:
+        num_called_gts = calc_called_gt(variations, rates=False)
+    mask = num_called_gts < min_num_genotypes
+    return mask
+
+
+def _mask_stats_with_few_samples(stats, variations, min_num_genotypes,
+                                 num_called_gts=None, masking_value=np.NaN):
+    if min_num_genotypes:
+        mask = _get_mask_for_masking_samples_with_few_gts(variations,
+                                                          min_num_genotypes,
+                                                          num_called_gts=num_called_gts)
+        stats[mask] = masking_value
+    return stats
