@@ -6,7 +6,7 @@ import os.path
 
 from variation6 import (CHROM_FIELD, POS_FIELD, ID_FIELD, REF_FIELD, ALT_FIELD,
                         QUAL_FIELD, GT_FIELD, GQ_FIELD, DP_FIELD, AO_FIELD,
-                        RO_FIELD, AD_FIELD)
+                        RO_FIELD, AD_FIELD, INDEX_FIELD)
 from variation6.variations import Variations
 
 DEFAULT_VARIATION_NUM_IN_CHUNK = 40000
@@ -60,7 +60,7 @@ def vcf_to_zarr(vcf_path, zarr_path, fields=None):
     allel.vcf_to_zarr(str(vcf_path), str(zarr_path), fields=zarr_fields)
 
 
-def load_zarr(path):
+def load_zarr(path, chunk_size=DEFAULT_VARIATION_NUM_IN_CHUNK):
     z_object = zarr.open_group(str(path), mode='r')
     variations = Variations(samples=da.from_zarr(z_object.samples))
     metadata = {}
@@ -74,10 +74,13 @@ def load_zarr(path):
             if array.attrs:
                 metadata[field] = dict(array.attrs.items())
 
-            chunks = (DEFAULT_VARIATION_NUM_IN_CHUNK,) + array.shape[1:]
+            chunks = (chunk_size,) + array.shape[1:]
 
             variations[field] = da.from_zarr(array, chunks=chunks)
     variations.metadata = metadata
+    variations[INDEX_FIELD] = da.arange(0, variations.num_variations,
+                                        dtype=int)
+
     return variations
 
 
@@ -130,16 +133,23 @@ def prepare_zarr_storage(variations, out_path):
 
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
-    for field, definition in ALLELE_ZARR_DEFINITION_MAPPINGS.items():
+    for field, array in variations.items():
+        if field == INDEX_FIELD:
+            definition = None
+        else:
+            definition = ALLELE_ZARR_DEFINITION_MAPPINGS[field]
+
         field_metadata = metadata.get(field, None)
         array = variations[field]
         if array is None:
             continue
         sources.append(array)
-
-        group_name = definition['group']
-        group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
-        path = os.path.sep + os.path.join(group.path, definition['field'])
+        if definition is not None:
+            group_name = definition['group']
+            group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
+            path = os.path.sep + os.path.join(group.path, definition['field'])
+        else:
+            path = INDEX_FIELD
         targets.append(LazyZarrArray(url=store, path=path,
                        attrs=field_metadata))
 
@@ -154,9 +164,18 @@ class LazyZarrArray():
         self._path = path
         self._dataset = None
         self._attrs = attrs
+        self._last_index = None
 
     def __setitem__(self, index, chunk):
+#         assert False
+        if self._path == INDEX_FIELD:
+            print('index', chunk)
+            if self._last_index is not None:
+                assert self._last_index < chunk[-1]
+            self._last_index = chunk[-1]
+            return
 
+#         print(chunk.ptp())
         if self._dataset is None:
             if not chunk.size:
                 return

@@ -4,6 +4,7 @@ import numpy as np
 from variation6.variations import Variations
 from variation6 import GT_FIELD, CHROM_FIELD
 
+
 class VariationsTest(unittest.TestCase):
 
     def test_basic_operations(self):
@@ -20,7 +21,7 @@ class VariationsTest(unittest.TestCase):
         variations.samples = ['1', '2', '3']
         self.assertEqual(variations.num_samples, 3)
 
-        #adding again samples fails
+        # adding again samples fails
         with self.assertRaises(RuntimeError) as _:
             variations.samples = ['1', '2', '3']
 
@@ -43,11 +44,6 @@ class VariationsTest(unittest.TestCase):
         variations[GT_FIELD] = gts
         self.assertTrue(np.array_equal(gts, variations[GT_FIELD]))
         self.assertEqual(variations.num_variations, 3)
-
-        # can not use arbitrary key name
-        with self.assertRaises(ValueError) as context:
-            variations['arbigtrary'] = gts
-        self.assertIn('Not allowed field arbigtrary', str(context.exception))
 
 
 if __name__ == "__main__":

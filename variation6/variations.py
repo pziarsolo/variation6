@@ -1,10 +1,9 @@
 import math
 import numpy as np
 
-from variation6 import VARIATION_FIELDS, CALL_FIELDS, PUBLIC_CALL_GROUP, \
-    GT_FIELD, EmptyVariationsError
+from variation6 import PUBLIC_CALL_GROUP, GT_FIELD, EmptyVariationsError
 
-ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
+# ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
 
 
 class Variations:
@@ -77,8 +76,6 @@ class Variations:
 #         if value.shape == (0,):
 #             print('data is empty')
 
-        if key not in ALLOWED_FIELDS:
-            raise ValueError(f'Not allowed field {key}')
         # we can not check by shape 0 if array is not computed.
         if (self.num_variations != 0 and not math.isnan(self.num_variations)
                 and self.num_variations != value.shape[0]):
@@ -98,9 +95,6 @@ class Variations:
         self._arrays[key] = value
 
     def __getitem__(self, key):
-        if key not in ALLOWED_FIELDS:
-            raise ValueError(f'Not allowed field {key}')
-
         return self._arrays.get(key)
 
     def __contains__(self, lookup):
