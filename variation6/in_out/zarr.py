@@ -169,7 +169,7 @@ class LazyZarrArray():
     def __setitem__(self, index, chunk):
 #         assert False
         if self._path == INDEX_FIELD:
-            print('index', chunk)
+#             print('index', chunk)
             if self._last_index is not None:
                 assert self._last_index < chunk[-1]
             self._last_index = chunk[-1]

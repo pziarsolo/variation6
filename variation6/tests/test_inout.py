@@ -7,8 +7,8 @@ from tempfile import TemporaryDirectory, NamedTemporaryFile
 import dask
 import numpy as np
 
-from variation6 import GT_FIELD, QUAL_FIELD, FLT_VARS, VARIATION_FIELDS, \
-    CALL_FIELDS, INDEX_FIELD
+from variation6 import (GT_FIELD, QUAL_FIELD, FLT_VARS, VARIATION_FIELDS,
+                        CALL_FIELDS)
 from variation6.tests import TEST_DATA_DIR
 from variation6.filters import remove_low_call_rate_vars
 from variation6.in_out.zarr import load_zarr, vcf_to_zarr, prepare_zarr_storage
@@ -58,9 +58,9 @@ class TestZarrOut(unittest.TestCase):
                 try:
                     self.assertTrue(np.all(original == new))
                 except AssertionError:
-
                     for row in range(original.shape[0]):
                         print(row, original[row, ...], new[row, ...])
+                    raise
 
 
 class TestVcfTohHf5(unittest.TestCase):
