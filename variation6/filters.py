@@ -3,7 +3,8 @@ import numpy as np
 
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
-                        FLT_VARS, CHROM_FIELD, POS_FIELD)
+                        FLT_VARS, CHROM_FIELD, POS_FIELD,
+    MIN_NUM_GENOTYPES_FOR_POP_STAT)
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_mac, calc_maf_by_gt, count_alleles,
@@ -110,18 +111,23 @@ def _filter_no_row(variations):
     return selector
 
 
-def filter_by_maf_by_allele_count(variations, max_allowable_maf=None, min_allowable_maf=None,
-                                  filter_id='filter_by_maf_by_allele_count'):
-    mafs = calc_maf_by_allele_count(variations)
+def filter_by_maf_by_allele_count(variations, max_allowable_maf=None,
+                                  min_allowable_maf=None,
+                                  filter_id='filter_by_maf_by_allele_count',
+                                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+    mafs = calc_maf_by_allele_count(variations,
+                                    min_num_genotypes=min_num_genotypes)
     # print(compute(mafs))
     result = _select_vars(variations, mafs['mafs'], min_allowable_maf, max_allowable_maf)
 
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
 
 
-def filter_by_maf(variations, max_alleles, max_allowable_maf=None, min_allowable_maf=None,
-                  filter_id='filter_by_maf',):
-    mafs = calc_maf_by_gt(variations, max_alleles=max_alleles)
+def filter_by_maf(variations, max_alleles, max_allowable_maf=None,
+                  min_allowable_maf=None, filter_id='filter_by_maf',
+                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+    mafs = calc_maf_by_gt(variations, max_alleles=max_alleles,
+                          min_num_genotypes=min_num_genotypes)
 
     result = _select_vars(variations, mafs['mafs'], min_allowable_maf,
                           max_allowable_maf)
@@ -129,9 +135,11 @@ def filter_by_maf(variations, max_alleles, max_allowable_maf=None, min_allowable
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
 
 
-def filter_by_mac(variations, max_alleles, max_allowable_mac=None, min_allowable_mac=None,
-                  filter_id='filter_by_mac'):
-    macs = calc_mac(variations, max_alleles=max_alleles)
+def filter_by_mac(variations, max_alleles, max_allowable_mac=None,
+                  min_allowable_mac=None, filter_id='filter_by_mac',
+                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+    macs = calc_mac(variations, max_alleles=max_alleles,
+                    min_num_genotypes=min_num_genotypes)
     # print(compute(macs))
 
     result = _select_vars(variations, macs['macs'], min_allowable_mac, max_allowable_mac)
@@ -215,9 +223,10 @@ def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
                                 min_allowable_het=None,
                                 min_allowable_call_dp=None,
                                 max_allowable_call_dp=None,
-                                filter_id='obs_het'):
+                                filter_id='obs_het',
+                                min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
 
-    obs_het = calc_obs_het(variations,
+    obs_het = calc_obs_het(variations, min_num_genotypes=min_num_genotypes,
                            min_allowable_call_dp=min_allowable_call_dp,
                            max_allowable_call_dp=max_allowable_call_dp)
 

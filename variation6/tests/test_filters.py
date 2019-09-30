@@ -107,7 +107,8 @@ class MafFilterTest(unittest.TestCase):
 
     def test_maf_by_allele_count_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        task = filter_by_maf_by_allele_count(variations, max_allowable_maf=0.6)
+        task = filter_by_maf_by_allele_count(variations, max_allowable_maf=0.6,
+                                             min_num_genotypes=2)
         result = compute(task, store_variation_to_memory=True)
         filtered_vars = result[FLT_VARS]
         self.assertEqual(filtered_vars.num_variations, 4)
@@ -116,7 +117,8 @@ class MafFilterTest(unittest.TestCase):
 
     def test_maf_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        task = filter_by_maf(variations, max_allowable_maf=0.6, max_alleles=3)
+        task = filter_by_maf(variations, max_allowable_maf=0.6, max_alleles=3,
+                             min_num_genotypes=2)
         result = compute(task, store_variation_to_memory=True)
         filtered_vars = result[FLT_VARS]
         self.assertEqual(filtered_vars.num_variations, 3)
@@ -190,5 +192,5 @@ class FilterByPositionTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    import sys; sys.argv = ['.', 'FilterSamplesTest']
+#     import sys; sys.argv = ['.', 'FilterSamplesTest']
     unittest.main()

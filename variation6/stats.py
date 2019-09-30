@@ -2,9 +2,8 @@ import dask.array as da
 import numpy as np
 
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
-                        RO_FIELD, DP_FIELD, EmptyVariationsError)
-
-MIN_NUM_GENOTYPES_FOR_POP_STAT = 2
+                        RO_FIELD, DP_FIELD, EmptyVariationsError,
+                        MIN_NUM_GENOTYPES_FOR_POP_STAT)
 
 
 def calc_missing_gt(variations, rates=True):

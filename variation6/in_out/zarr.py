@@ -90,7 +90,7 @@ def prepare_zarr_storage_old(variations, out_path):
     delayed_datasets = []
     metadata = variations.metadata
     # samples
-    # variants = root.create_group('samples', overwrite=True)
+
     dataset = da.to_zarr(variations.samples, url=str(out_path),
                          compute=False, component='/samples',
                          object_codec=numcodecs.VLenUTF8())
@@ -132,9 +132,12 @@ def prepare_zarr_storage(variations, out_path):
     samples_array.compute_chunk_sizes()
     sources.append(samples_array)
 
+    object_codec = None
+    if samples_array.dtype == object:
+        object_codec = numcodecs.VLenUTF8()
+
     dataset = zarr.create(shape=samples_array.shape, path='samples', store=store,
-                          object_codec=numcodecs.VLenUTF8(),
-                          dtype=samples_array.dtype)
+                          dtype=samples_array.dtype, object_codec=object_codec)
     targets.append(dataset)
 
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)

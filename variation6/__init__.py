@@ -48,6 +48,8 @@ N_KEPT = 'n_kept'
 N_FILTERED_OUT = 'n_filtered_out'
 TOT = 'tot'
 
+MIN_NUM_GENOTYPES_FOR_POP_STAT = 10
+
 
 class EmptyVariationsError(Exception):
     pass
