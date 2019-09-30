@@ -66,6 +66,7 @@ def _filter_samples(variations, samples, reverse=False):
 
     samples_in_variation = variations.samples.compute()
     sample_cols = np.array(sorted(list(samples_in_variation).index(sample) for sample in samples))
+    samples = [samples_in_variation[index] for index in sample_cols]
 
     if reverse:
         sample_cols = [index for index in range(len(samples_in_variation)) if index not in sample_cols]

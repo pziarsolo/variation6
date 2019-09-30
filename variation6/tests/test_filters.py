@@ -78,18 +78,23 @@ class FilterSamplesTest(unittest.TestCase):
 
     def test_keep_samples(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        samples = ['pepo', 'upv196']
+#         print(variations.samples.compute())
+#         print(variations[DP_FIELD].compute())
+
+        samples = ['upv196', 'pepo']
         task = keep_samples(variations, samples=samples)
         processed = compute(task, store_variation_to_memory=True)
         dps = processed[FLT_VARS][DP_FIELD]
-        self.assertTrue(np.all(samples == processed[FLT_VARS].samples))
+
+        self.assertTrue(np.all(processed[FLT_VARS].samples == ['pepo', 'upv196']))
         expected = [[-1, 9], [-1, 8], [-1, 8], [14, 6], [-1, -1], [-1, -1],
                     [-1, 6]]
         self.assertTrue(np.all(dps == expected))
 
     def test_remove_samples(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        samples = ['pepo', 'upv196']
+        samples = ['upv196', 'pepo']
+
         task = remove_samples(variations, samples=samples)
         processed = compute(task, store_variation_to_memory=True)
         dps = processed[FLT_VARS][DP_FIELD]
@@ -185,5 +190,5 @@ class FilterByPositionTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    import sys; sys.argv = ['.', 'MafFilterTest.test_mac_filter']
+    import sys; sys.argv = ['.', 'FilterSamplesTest']
     unittest.main()

@@ -128,8 +128,14 @@ def prepare_zarr_storage(variations, out_path):
     sources = []
     targets = []
 
-    sources.append(variations.samples)
-    targets.append(LazyZarrArray(url=store, path='samples'))
+    samples_array = variations.samples
+    samples_array.compute_chunk_sizes()
+    sources.append(samples_array)
+
+    dataset = zarr.create(shape=samples_array.shape, path='samples', store=store,
+                          object_codec=numcodecs.VLenUTF8(),
+                          dtype=samples_array.dtype)
+    targets.append(dataset)
 
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
@@ -143,6 +149,7 @@ def prepare_zarr_storage(variations, out_path):
         array = variations[field]
         if array is None:
             continue
+        array.compute_chunk_sizes()
         sources.append(array)
         if definition is not None:
             group_name = definition['group']
@@ -150,55 +157,16 @@ def prepare_zarr_storage(variations, out_path):
             path = os.path.sep + os.path.join(group.path, definition['field'])
         else:
             path = INDEX_FIELD
-        targets.append(LazyZarrArray(url=store, path=path,
-                       attrs=field_metadata))
+
+        object_codec = None
+        if array.dtype == object:
+            object_codec = numcodecs.VLenUTF8()
+        dataset = zarr.create(shape=array.shape, path=path, store=store,
+                              object_codec=object_codec, dtype=array.dtype)
+        if field_metadata is not None:
+            for key, value in field_metadata.items():
+                dataset.attrs[key] = value
+
+        targets.append(dataset)
 
     return da.store(sources, targets, compute=False)
-
-
-class LazyZarrArray():
-
-    def __init__(self, url, path, attrs=None):
-        # create_dataset
-        self._url = url
-        self._path = path
-        self._dataset = None
-        self._attrs = attrs
-        self._last_index = None
-
-    def __setitem__(self, index, chunk):
-#         assert False
-        if self._path == INDEX_FIELD:
-#             print('index', chunk)
-            if self._last_index is not None:
-                assert self._last_index < chunk[-1]
-            self._last_index = chunk[-1]
-            return
-
-#         print(chunk.ptp())
-        if self._dataset is None:
-            if not chunk.size:
-                return
-            object_codec = None
-            if chunk.dtype == object:
-                object_codec = numcodecs.VLenUTF8()
-
-            shape = (0,) + chunk.shape[1:]
-
-            self._dataset = zarr.create(shape=shape,
-                                        chunks=chunk.shape,
-                                        path=self._path,
-                                        store=self._url,
-                                        object_codec=object_codec,
-                                        dtype=chunk.dtype)
-
-            if self._attrs is not None:
-                for key, value in self._attrs.items():
-                    self._dataset.attrs[key] = value
-        if self._dataset.shape[1:] != chunk.shape[1:]:
-            raise ValueError(f'dataset shape and chunk shape differ: {self._dataset.shape} = {chunk.shape}')
-
-#         print(self._dataset.shape[0], index[0].start)
-#         assert self._dataset.shape[0] == index[0].start
-
-        self._dataset.append(chunk)
