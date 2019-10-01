@@ -23,6 +23,7 @@ class MinCallFilterTest(unittest.TestCase):
     def test_filter_by_call_rate(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
         pipeline_futures = {}
+
         future_result = remove_low_call_rate_vars(variations, min_call_rate=0.5)
         pipeline_futures.update(future_result)
 
@@ -31,12 +32,11 @@ class MinCallFilterTest(unittest.TestCase):
         pipeline_futures.update(future_result2)
 
         processed = compute(pipeline_futures, store_variation_to_memory=True)
-
-        self.assertEqual(processed['call_rate'][N_KEPT], 2)
-        self.assertEqual(processed['call_rate'][N_FILTERED_OUT], 5)
+        self.assertEqual(processed['call_rate'][N_KEPT], 5)
+        self.assertEqual(processed['call_rate'][N_FILTERED_OUT], 2)
 
         gts = processed[FLT_VARS][GT_FIELD]
-        self.assertEqual(gts.shape, (2, 3, 2))
+        self.assertEqual(gts.shape, (5, 3, 2))
         self.assertTrue(np.all(processed[FLT_VARS].samples == variations.samples.compute()))
         self.assertEqual(processed[FLT_VARS].metadata, variations.metadata)
 
@@ -133,6 +133,62 @@ class MafFilterTest(unittest.TestCase):
         self.assertEqual(filtered_vars.num_variations, 0)
         self.assertEqual(result['filter_by_mac'], {'n_kept': 0,
                                                    'n_filtered_out': 7})
+
+    def test_filter_macs(self):
+        # with some missing values
+        gts = np.array([[[0, 0], [1, 1], [0, 1], [1, 1], [0, 0]],
+                           [[0, 0], [0, 0], [0, 0], [0, 0], [1, 1]],
+                           [[0, 0], [0, 0], [0, 0], [0, 0], [0, 1]],
+                           [[0, 0], [-1, -1], [0, 1], [0, 0], [1, 1]]])
+        samples = np.array([str(i) for i in range(gts.shape[1])])
+        variations = Variations(samples=da.array(samples))
+        variations[GT_FIELD] = da.from_array(gts)
+        task = filter_by_mac(variations, max_alleles=2, min_num_genotypes=5)
+        result = compute(task, store_variation_to_memory=True)
+        assert result['filter_by_mac'][N_KEPT] == 4
+        assert result['filter_by_mac'][N_FILTERED_OUT] == 0
+
+        task = filter_by_mac(variations, max_alleles=2, min_num_genotypes=5,
+                             min_allowable_mac=0)
+        result = compute(task, store_variation_to_memory=True)
+        assert np.all(result[FLT_VARS][GT_FIELD] == gts[[0, 1, 2]])
+        assert result['filter_by_mac'][N_KEPT] == 3
+        assert result['filter_by_mac'][N_FILTERED_OUT] == 1
+
+        # without missing values
+        gts = np.array([[[0, 0], [1, 1], [0, 1], [1, 1], [0, 0]],
+                           [[0, 0], [0, 0], [0, 0], [0, 0], [1, 1]],
+                           [[0, 0], [0, 0], [0, 0], [0, 0], [0, 1]],
+                           [[0, 0], [0, 0], [0, 1], [0, 0], [1, 1]]])
+        samples = np.array([str(i) for i in range(gts.shape[1])])
+        variations = Variations(samples=da.array(samples))
+        variations[GT_FIELD] = da.from_array(gts)
+        task = filter_by_mac(variations, max_alleles=2, min_num_genotypes=0,
+                             max_allowable_mac=4)
+        result = compute(task, store_variation_to_memory=True)
+        expected = np.array([[[0, 0], [1, 1], [0, 1], [1, 1], [0, 0]],
+                               [[0, 0], [0, 0], [0, 0], [0, 0], [1, 1]],
+                               [[0, 0], [0, 0], [0, 1], [0, 0], [1, 1]]])
+
+        assert np.all(result[FLT_VARS][GT_FIELD] == expected)
+        expected = np.array([[[0, 0], [0, 0], [0, 0], [0, 0], [1, 1]],
+                               [[0, 0], [0, 0], [0, 1], [0, 0], [1, 1]]])
+        task = filter_by_mac(variations, max_alleles=2, min_num_genotypes=0,
+                             min_allowable_mac=3.5, max_allowable_mac=4)
+        result = compute(task, store_variation_to_memory=True)
+        assert np.all(result[FLT_VARS][GT_FIELD] == expected)
+
+        expected = np.array([[[0, 0], [1, 1], [0, 1], [1, 1], [0, 0]]])
+        task = filter_by_mac(variations, max_alleles=2, min_num_genotypes=0,
+                             max_allowable_mac=3)
+        result = compute(task, store_variation_to_memory=True)
+        assert np.all(result[FLT_VARS][GT_FIELD] == expected)
+
+        task = filter_by_mac(variations, max_alleles=2, min_num_genotypes=0,
+                             min_allowable_mac=2, max_allowable_mac=5)
+        result = compute(task, store_variation_to_memory=True)
+
+        assert np.all(result[FLT_VARS][GT_FIELD] == variations[GT_FIELD])
 
 
 class NoVariableOrMissingTest(unittest.TestCase):

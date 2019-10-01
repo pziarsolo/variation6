@@ -4,7 +4,7 @@ import numpy as np
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
                         FLT_VARS, CHROM_FIELD, POS_FIELD,
-    MIN_NUM_GENOTYPES_FOR_POP_STAT)
+                        MIN_NUM_GENOTYPES_FOR_POP_STAT)
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_mac, calc_maf_by_gt, count_alleles,
@@ -14,7 +14,12 @@ from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
                               filter_id='call_rate'):
     num_missing_gts = calc_missing_gt(variations, rates=rates)['num_missing_gts']
-    selected_vars = num_missing_gts >= min_call_rate
+    if rates:
+        num_called = 1 - num_missing_gts
+    else:
+        num_called = variations.gt.shape[1] - num_missing_gts
+
+    selected_vars = num_called >= min_call_rate
     variations = variations.get_vars(selected_vars)
 
     num_selected_vars = da.count_nonzero(selected_vars)

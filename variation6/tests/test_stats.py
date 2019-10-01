@@ -13,7 +13,7 @@ from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_maf_by_gt, calc_mac, count_alleles,
                               calc_obs_het)
-from variation6.filters import remove_low_call_rate_vars
+from variation6.filters import remove_low_call_rate_vars, keep_samples
 
 
 def _create_empty_dask_variations():
@@ -59,16 +59,47 @@ class StatsTest(unittest.TestCase):
 
     def test_calc_missing(self):
         variations = _create_dask_variations()
+        variations = keep_samples(variations, samples=['pepo', 'upv196'])[FLT_VARS]
         future_result = calc_missing_gt(variations, rates=False)
         result = compute(future_result)
         self.assertTrue(np.array_equal(result['num_missing_gts'],
-                                       [1, 1, 1, 1, 3, 2, 1]))
-
+                                       [1, 1, 1, 0, 2, 2, 1]))
+        variations = _create_dask_variations()
+        variations = keep_samples(variations, samples=['pepo', 'upv196'])[FLT_VARS]
         future_result = calc_missing_gt(variations, rates=True)
         result = compute(future_result)
-        expected = [0.33, 0.33, 0.33, 0.333, 1, 0.666, 0.33]
+        expected = [0.5, 0.5, 0.5, 0, 1, 1, 0.5]
         for a, b in zip(result['num_missing_gts'], expected):
             self.assertAlmostEqual(a, b, places=2)
+
+    def test_calc_missing2(self):
+        variations = Variations()
+        gts = np.array([[[0, 0], [0, 0]],
+                        [[0, 0], [-1, -1]],
+                        [[0, 0], [-1, -1]],
+                        [[-1, -1], [-1, -1]]])
+        samples = [str(i) for i in range(gts.shape[1])]
+        variations.samples = samples
+        variations[GT_FIELD] = gts
+
+        future_result = calc_missing_gt(variations, rates=False)
+        result = compute(future_result)['num_missing_gts']
+
+        expected = np.array([2, 1, 1, 0])
+        assert np.all(result == 2 - expected)
+
+        gts = np.array([[[0, 0], [0, 0], [0, 0], [0, 0], [0, -1]],
+                           [[0, 0], [0, 0], [0, 0], [0, 0], [-1, -1]],
+                           [[0, 0], [0, 0], [0, 0], [-1, -1], [-1, -1]],
+                           [[0, 0], [-1, -1], [-1, -1], [-1, -1], [-1, -1]]])
+        samples = [str(i) for i in range(gts.shape[1])]
+        variations = Variations()
+        variations.samples = samples
+        variations[GT_FIELD] = gts
+        future_result = calc_missing_gt(variations, rates=False)
+        result = compute(future_result)['num_missing_gts']
+        expected = np.array([0.5, 1, 2, 4])
+        assert np.all(result == expected)
 
     def test_calc_missing_empty_vars(self):
         variations = _create_empty_dask_variations()
@@ -151,6 +182,18 @@ class StatsTest(unittest.TestCase):
                 continue
             self.assertAlmostEqual(a, b, places=2)
 
+    def test_calc_mac2(self):
+        gts = np.array([[[0], [0], [0], [0]], [[0], [0], [1], [1]],
+                           [[0], [0], [0], [1]], [[-1], [-1], [-1], [-1]]])
+        samples = np.array([str(i) for i in range(gts.shape[1])])
+        variations = Variations(samples=da.array(samples))
+        variations[GT_FIELD] = da.from_array(gts)
+
+        # with this step we create a  variation wi
+        result = calc_mac(variations, max_alleles=3, min_num_genotypes=1)
+        macs = compute(result)['macs']
+        assert np.allclose(macs, np.array([4, 2, 3, np.NaN]), equal_nan=True)
+
 
 class ObsHetTest(unittest.TestCase):
 
@@ -182,5 +225,6 @@ class ObsHetTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-#     import sys; sys.argv = ['', 'StatsTest.test_calc_maf_by_allele_count']
+#     import sys; sys.argv = ['', 'StatsTest.test_calc_missing2']
     unittest.main()
+

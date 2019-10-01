@@ -91,17 +91,18 @@ def _calc_mac(gts, max_alleles):
     gt_counts = count_alleles(gts, max_alleles=max_alleles)
     if gt_counts is None:
         return np.array([])
-
+#     print(gt_counts)
     missing_allele_idx = -1  # it's allways in the last position
     num_missing = np.copy(gt_counts[:, missing_allele_idx])
     gt_counts[:, missing_allele_idx] = 0
-
+#     print(gt_counts)
     max_ = np.amax(gt_counts, axis=1)
+#     print(max_)
     num_samples = gts.shape[1]
     ploidy = gts.shape[2]
     num_chroms = num_samples * ploidy
     mac = num_samples - (num_chroms - num_missing - max_) / ploidy
-
+#     print(gts.shape, mac)
     # we set the snps with no data to nan
     mac[max_ == 0] = np.nan
     return mac
