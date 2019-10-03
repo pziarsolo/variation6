@@ -4,8 +4,10 @@ import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 
+import zarr
 import dask
 import numpy as np
+import dask.array as da
 
 from variation6 import (GT_FIELD, QUAL_FIELD, FLT_VARS, VARIATION_FIELDS,
                         CALL_FIELDS)
@@ -61,6 +63,71 @@ class TestZarrOut(unittest.TestCase):
                     for row in range(original.shape[0]):
                         print(row, original[row, ...], new[row, ...])
                     raise
+
+    def test_zarr_functionament(self):
+        # with shape
+        np_array = np.random.randint(1, 10, size=1000)
+        array = da.from_array(np_array)
+
+        with TemporaryDirectory() as tmpdir:
+            delayed = da.to_zarr(array, url=tmpdir,
+                                 compute=False, component='/data')
+            dask.compute(delayed)
+
+            z_object = zarr.open_group(tmpdir, mode='r')
+
+            assert np.all(np_array == z_object.data[:])
+
+        # def without_shape():
+        np_array = np.random.randint(1, 10, size=1000000)
+        array = da.from_array(np_array)
+
+        array = array[array > 5]
+
+        with TemporaryDirectory() as tmpdir:
+            array.compute_chunk_sizes()
+            delayed = da.to_zarr(array, url=tmpdir,
+                                 compute=False, component='/data')
+            dask.compute(delayed)
+
+            z_object = zarr.open_group(tmpdir, mode='r')
+
+            assert np.all(np_array[np_array > 5] == z_object.data[:])
+
+        # without_shape2
+        np_array = np.random.randint(1, 10, size=10000000)
+        array = da.from_array(np_array)
+
+        array = array[array > 5]
+
+        with TemporaryDirectory() as tmpdir:
+            array.compute_chunk_sizes()
+            delayed = da.to_zarr(array, url=tmpdir,
+                                 compute=False, component='/data')
+            dask.compute(delayed)
+
+            z_object = zarr.open_group(tmpdir, mode='r')
+
+            assert np.all(np_array[np_array > 5] == z_object.data[:])
+
+        # write_chunks
+        chunks = []
+
+        sizes = (1, 2, 3)
+        # total_size = sum(sizes)
+
+        for i, n in enumerate(sizes):
+            chunks.append(np.full(n, (i,)))
+        with TemporaryDirectory() as tmpdir:
+            store = zarr.DirectoryStore(tmpdir)
+            root = zarr.group(store=store, overwrite=True)
+            dataset = root.create_dataset('test', shape=(0,),
+                                  chunks=chunks[0].shape,
+                                  dtype=chunks[0].dtype)
+
+            # offset = 0
+            for chunk in chunks:
+                dataset.append(chunk)
 
 
 class TestVcfTohHf5(unittest.TestCase):
