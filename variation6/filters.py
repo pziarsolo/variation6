@@ -6,7 +6,8 @@ import numpy as np
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
                         FLT_VARS, CHROM_FIELD, POS_FIELD,
-                        MIN_NUM_GENOTYPES_FOR_POP_STAT, ALT_FIELD)
+                        MIN_NUM_GENOTYPES_FOR_POP_STAT, ALT_FIELD, FLT_STATS,
+                        FLT_ID)
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_mac, calc_maf_by_gt, count_alleles,
@@ -14,9 +15,12 @@ from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
 from variation6.in_out.zarr import load_zarr, prepare_zarr_storage
 from variation6.compute import compute
 
+N_BINS = 40
+
 
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
-                              filter_id='call_rate'):
+                              filter_id='call_rate', calc_histogram=False,
+                              n_bins=N_BINS, limits=None):
     num_missing_gts = calc_missing_gt(variations, rates=rates)['num_missing_gts']
     if rates:
         num_called = 1 - num_missing_gts
@@ -30,7 +34,13 @@ def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
     num_filtered = da.count_nonzero(da.logical_not(selected_vars))
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
-    return {FLT_VARS: variations, filter_id: flt_stats}
+
+#     if calc_histogram:
+#
+#         flt_stats[COUNT] = ''
+#         flt_stats[BIN_EDGES] = ''
+
+    return {FLT_VARS: variations, FLT_ID: filter_id, FLT_STATS:flt_stats}
 
 
 def stack_in_memory(array, axis):
@@ -112,7 +122,7 @@ def _select_vars(variations, stats, min_allowable=None, max_allowable=None):
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
-    return {FLT_VARS: variations, 'stats': flt_stats }
+    return {FLT_VARS: variations, FLT_STATS: flt_stats }
 
 
 def _filter_no_row(variations):
@@ -130,7 +140,8 @@ def filter_by_maf_by_allele_count(variations, max_allowable_maf=None,
     # print(compute(mafs))
     result = _select_vars(variations, mafs['mafs'], min_allowable_maf, max_allowable_maf)
 
-    return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
+    return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
+            FLT_STATS: result[FLT_STATS]}
 
 
 def filter_by_maf(variations, max_alleles, max_allowable_maf=None,
@@ -142,7 +153,8 @@ def filter_by_maf(variations, max_alleles, max_allowable_maf=None,
     result = _select_vars(variations, mafs['mafs'], min_allowable_maf,
                           max_allowable_maf)
 
-    return {FLT_VARS: result[FLT_VARS], filter_id: result['stats'], 'maf': mafs}
+    return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
+            FLT_STATS: result[FLT_STATS]}
 
 
 def filter_by_mac(variations, max_alleles, max_allowable_mac=None,
@@ -154,7 +166,8 @@ def filter_by_mac(variations, max_alleles, max_allowable_mac=None,
 
     result = _select_vars(variations, macs['macs'], min_allowable_mac, max_allowable_mac)
 
-    return {FLT_VARS: result[FLT_VARS], filter_id: result['stats']}
+    return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
+            FLT_STATS: result[FLT_STATS]}
 
 
 def keep_variable_variations(variations, max_alleles,
@@ -176,7 +189,8 @@ def keep_variable_variations(variations, max_alleles,
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
-    return {FLT_VARS: selected_variations, filter_id: flt_stats}
+    return {FLT_VARS: selected_variations, FLT_ID: filter_id,
+            FLT_STATS: flt_stats}
 
 
 def keep_variations_in_regions(variations, regions,
@@ -222,7 +236,8 @@ def _filter_by_snp_position(variations, regions, filter_id, reverse=False):
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
-    return {FLT_VARS: selected_variations, filter_id: flt_stats}
+    return {FLT_VARS: selected_variations, FLT_ID: filter_id,
+            FLT_STATS: flt_stats}
 
 
 def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
@@ -239,7 +254,23 @@ def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
     result = _select_vars(variations, obs_het['obs_het'],
                           min_allowable=min_allowable_het,
                           max_allowable=max_allowable_het)
-    return {FLT_VARS: result[FLT_VARS], filter_id: result['stats']}
+
+    return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
+            FLT_STATS: result[FLT_STATS]}
+
+
+def _reformat_task_dict(task):
+#     task = {FLT_VARS: task[FLT_VARS], task[FLT_ID]: task[FLT_STATS]}
+    task = {FLT_VARS: task[FLT_VARS], task[FLT_ID]: {FLT_STATS: task[FLT_STATS]}}
+    task = {FLT_VARS: task[FLT_VARS], FLT_STATS: {task[FLT_ID]: task[FLT_STATS]}}
+    return task
+
+
+def _add_task_to_pipeline(pipeline_tasks, task):
+    pipeline_tasks[FLT_VARS] = task[FLT_VARS]
+    if FLT_STATS not in pipeline_tasks:
+        pipeline_tasks[FLT_STATS] = OrderedDict()
+    pipeline_tasks[FLT_STATS][task[FLT_ID]] = task[FLT_STATS]
 
 
 def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
@@ -249,35 +280,35 @@ def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
                       remove_non_variable_snvs=None, max_allowable_mac=None,
                       max_allowable_het=None, min_call_dp_for_het_call=None,
                       verbose=True):
-    pipeline_tasks = OrderedDict()
+    pipeline_tasks = {}
     variations = load_zarr(in_zarr_path)
     max_alleles = variations[ALT_FIELD].shape[1]
     task = {FLT_VARS: variations}
 
     if samples_to_keep is not None:
         task = keep_samples(task[FLT_VARS], samples_to_keep)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if samples_to_remove is not None:
         task = remove_samples(task[FLT_VARS], samples_to_remove)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if regions_to_remove is not None:
         task = remove_variations_in_regions(task[FLT_VARS], regions_to_remove)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if regions_to_keep is not None:
         task = keep_variations_in_regions(task[FLT_VARS], regions_to_keep)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if min_dp_setter is not None:
         task = min_depth_gt_to_missing(task[FLT_VARS], min_depth=min_dp_setter)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if remove_non_variable_snvs:
         task = keep_variable_variations(task[FLT_VARS],
                                         max_alleles=max_alleles)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if max_allowable_mac is not None:
         if samples_to_keep:
@@ -289,25 +320,26 @@ def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
             max_allowable_mac = len(variations.samples) - max_allowable_mac
         task = filter_by_mac(task[FLT_VARS], max_allowable_mac=max_allowable_mac,
                              max_alleles=max_alleles)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if min_call_rate:
         task = remove_low_call_rate_vars(task[FLT_VARS],
                                          min_call_rate=min_call_rate)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     if max_allowable_het is not None and min_call_dp_for_het_call is not None:
         task = filter_by_obs_heterocigosis(task[FLT_VARS],
                                            max_allowable_het=max_allowable_het,
                                            min_call_dp_for_het_call=min_call_dp_for_het_call)
-        pipeline_tasks.update(task)
+        _add_task_to_pipeline(pipeline_tasks, task)
 
     delayed_store = prepare_zarr_storage(task[FLT_VARS], out_zarr_path)
     pipeline_tasks[FLT_VARS] = delayed_store
 
     result = compute(pipeline_tasks, store_variation_to_memory=False)
+
     if verbose:
-        for filter_name, task_result in result.items():
+        for filter_name, task_result in result[FLT_STATS].items():
             if N_KEPT in task_result:
                 total = task_result[N_FILTERED_OUT] + task_result[N_KEPT]
                 print(f"Filter: {filter_name}")

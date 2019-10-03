@@ -60,6 +60,23 @@ class ComputeTest(unittest.TestCase):
 
         self.assertNotIn('vars', processed)
 
+        initial = {'vars': variations,
+                  'data': {'da': {'da1':da1, 'da2': da2, 'da3': da3}}}
+
+        # recursive
+        processed = compute(initial, store_variation_to_memory=False)
+        assert np.all(processed['data']['da']['da1'] == [1, 2, 3, 4, 5])
+        assert np.all(processed['data']['da']['da2'] == [6, 7, 8, 9, 0])
+        assert np.all(processed['data']['da']['da3'] == [ 7, 9, 11, 13, 5])
+        self.assertNotIn('vars', processed)
+
+        initial = {'vars': variations,
+                  'data': {'d': {'da': {'da1':da1, 'da2': da2, 'da3': da3}}}}
+        processed = compute(initial, store_variation_to_memory=False)
+        assert np.all(processed['data']['d']['da']['da1'] == [1, 2, 3, 4, 5])
+        assert np.all(processed['data']['d']['da']['da2'] == [6, 7, 8, 9, 0])
+        assert np.all(processed['data']['d']['da']['da3'] == [ 7, 9, 11, 13, 5])
+
 
 if __name__ == "__main__":
     # import sys;sys.argv = ['', 'Test.test_compute']

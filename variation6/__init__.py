@@ -44,6 +44,7 @@ MISSING_GT = [MISSING_INT, MISSING_INT]
 
 FLT_VARS = 'flt_vars'
 FLT_STATS = 'flt_stats'
+FLT_ID = 'flt_id'
 N_KEPT = 'n_kept'
 N_FILTERED_OUT = 'n_filtered_out'
 TOT = 'tot'
