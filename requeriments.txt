@@ -2,3 +2,4 @@ dask[complete]
 scikit-allel
 zarr
 h5py
+matplotlib

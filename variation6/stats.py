@@ -5,45 +5,49 @@ import numpy as np
 
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         RO_FIELD, DP_FIELD, EmptyVariationsError,
-                        MIN_NUM_GENOTYPES_FOR_POP_STAT)
+                        MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES)
 
-DEF_NUM_BINS = 20
-MISSING_VALUES = {}
+DEF_NUM_BINS = 40
 
 
-def _calc_histogram(vector, n_bins, range_, weights=None):
+def _calc_histogram(vector, n_bins, limits, weights=None):
     try:
         dtype = vector.dtype
     except AttributeError:
         dtype = type(vector[0])
+
     missing_value = MISSING_VALUES[dtype]
 
     if weights is None:
         if math.isnan(missing_value):
-            not_nan = ~np.isnan(vector)
+            not_nan = ~da.isnan(vector)
         else:
             not_nan = vector != missing_value
 
         vector = vector[not_nan]
+
+    if limits is None:
+        limits = (da.min(vector), da.max(vector))
+
     try:
-        result = np.histogram(vector, bins=n_bins, range=range_,
-                                 weights=weights)
+        result = da.histogram(vector, bins=n_bins, range=limits,
+                              weights=weights)
     except ValueError as error:
         if ('parameter must be finite' in str(error) or
                 re.search('autodetected range of .*finite', str(error))):
-            isfinite = ~np.isinf(vector)
+            isfinite = ~da.isinf(vector)
             vector = vector[isfinite]
             if weights is not None:
                 weights = weights[isfinite]
-            result = np.histogram(vector, bins=n_bins, range=range_,
-                                     weights=weights)
+            result = da.histogram(vector, bins=n_bins, range=limits,
+                                  weights=weights)
         else:
             raise
     return result
 
 
-def histogram(vector, n_bins=DEF_NUM_BINS, range_=None, weights=None):
-    return _calc_histogram(vector, n_bins, range_=range_, weights=weights)
+def histogram(vector, n_bins=DEF_NUM_BINS, limits=None, weights=None):
+    return _calc_histogram(vector, n_bins, limits=limits, weights=weights)
 
 
 def calc_missing_gt(variations, rates=True):

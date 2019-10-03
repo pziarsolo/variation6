@@ -1,3 +1,4 @@
+import sys
 from collections import OrderedDict
 
 import dask.array as da
@@ -7,20 +8,19 @@ from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
                         FLT_VARS, CHROM_FIELD, POS_FIELD,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT, ALT_FIELD, FLT_STATS,
-                        FLT_ID)
+                        FLT_ID, COUNT, BIN_EDGES)
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_mac, calc_maf_by_gt, count_alleles,
-                              calc_obs_het)
+                              calc_obs_het, DEF_NUM_BINS, histogram)
 from variation6.in_out.zarr import load_zarr, prepare_zarr_storage
 from variation6.compute import compute
-
-N_BINS = 40
+from variation6.plot import plot_histogram
 
 
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
                               filter_id='call_rate', calc_histogram=False,
-                              n_bins=N_BINS, limits=None):
+                              n_bins=DEF_NUM_BINS, limits=None):
     num_missing_gts = calc_missing_gt(variations, rates=rates)['num_missing_gts']
     if rates:
         num_called = 1 - num_missing_gts
@@ -35,10 +35,11 @@ def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
-#     if calc_histogram:
-#
-#         flt_stats[COUNT] = ''
-#         flt_stats[BIN_EDGES] = ''
+    if calc_histogram:
+        counts, bin_edges = histogram(num_called, n_bins=n_bins, limits=limits)
+        flt_stats[COUNT] = counts
+        flt_stats[BIN_EDGES] = bin_edges
+        flt_stats['limits'] = [min_call_rate]
 
     return {FLT_VARS: variations, FLT_ID: filter_id, FLT_STATS:flt_stats}
 
@@ -134,11 +135,24 @@ def _filter_no_row(variations):
 def filter_by_maf_by_allele_count(variations, max_allowable_maf=None,
                                   min_allowable_maf=None,
                                   filter_id='filter_by_maf_by_allele_count',
-                                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+                                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
+                                  calc_histogram=False, n_bins=DEF_NUM_BINS,
+                                  limits=None):
     mafs = calc_maf_by_allele_count(variations,
                                     min_num_genotypes=min_num_genotypes)
     # print(compute(mafs))
     result = _select_vars(variations, mafs['mafs'], min_allowable_maf, max_allowable_maf)
+
+    if calc_histogram:
+        counts, bin_edges = histogram(mafs['mafs'], n_bins=n_bins, limits=limits)
+        result[FLT_STATS][COUNT] = counts
+        result[FLT_STATS][BIN_EDGES] = bin_edges
+        limits = []
+        if min_allowable_maf is not None:
+            limits.append(min_allowable_maf)
+        if max_allowable_maf is not None:
+            limits.append(max_allowable_maf)
+        result[FLT_STATS]['limits'] = limits
 
     return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
             FLT_STATS: result[FLT_STATS]}
@@ -146,12 +160,24 @@ def filter_by_maf_by_allele_count(variations, max_allowable_maf=None,
 
 def filter_by_maf(variations, max_alleles, max_allowable_maf=None,
                   min_allowable_maf=None, filter_id='filter_by_maf',
-                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
+                  calc_histogram=False, n_bins=DEF_NUM_BINS, limits=None):
     mafs = calc_maf_by_gt(variations, max_alleles=max_alleles,
                           min_num_genotypes=min_num_genotypes)
 
     result = _select_vars(variations, mafs['mafs'], min_allowable_maf,
                           max_allowable_maf)
+
+    if calc_histogram:
+        counts, bin_edges = histogram(mafs['mafs'], n_bins=n_bins, limits=limits)
+        result[FLT_STATS][COUNT] = counts
+        result[FLT_STATS][BIN_EDGES] = bin_edges
+        limits = []
+        if min_allowable_maf is not None:
+            limits.append(min_allowable_maf)
+        if max_allowable_maf is not None:
+            limits.append(max_allowable_maf)
+        result[FLT_STATS]['limits'] = limits
 
     return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
             FLT_STATS: result[FLT_STATS]}
@@ -159,19 +185,31 @@ def filter_by_maf(variations, max_alleles, max_allowable_maf=None,
 
 def filter_by_mac(variations, max_alleles, max_allowable_mac=None,
                   min_allowable_mac=None, filter_id='filter_by_mac',
-                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+                  min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
+                  calc_histogram=False, n_bins=DEF_NUM_BINS, limits=None):
     macs = calc_mac(variations, max_alleles=max_alleles,
                     min_num_genotypes=min_num_genotypes)
     # print(compute(macs))
 
     result = _select_vars(variations, macs['macs'], min_allowable_mac, max_allowable_mac)
 
+    if calc_histogram:
+        counts, bin_edges = histogram(macs['macs'], n_bins=n_bins, limits=limits)
+        result[FLT_STATS][COUNT] = counts
+        result[FLT_STATS][BIN_EDGES] = bin_edges
+        limits = []
+        if min_allowable_mac is not None:
+            limits.append(min_allowable_mac)
+        if max_allowable_mac is not None:
+            limits.append(max_allowable_mac)
+        result[FLT_STATS]['limits'] = limits
+
     return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
             FLT_STATS: result[FLT_STATS]}
 
 
 def keep_variable_variations(variations, max_alleles,
-                                   filter_id='variable_variations'):
+                             filter_id='variable_variations'):
     gts = variations[GT_FIELD]
     some_not_missing_gts = da.any(gts != MISSING_INT, axis=2)
     selected_vars1 = da.any(some_not_missing_gts, axis=1)
@@ -245,7 +283,9 @@ def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
                                 min_call_dp_for_het_call=None,
                                 max_call_dp_for_het_call=None,
                                 filter_id='obs_het',
-                                min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+                                min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
+                                calc_histogram=False, n_bins=DEF_NUM_BINS,
+                                limits=None):
 
     obs_het = calc_obs_het(variations, min_num_genotypes=min_num_genotypes,
                            min_call_dp_for_het_call=min_call_dp_for_het_call,
@@ -254,6 +294,16 @@ def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
     result = _select_vars(variations, obs_het['obs_het'],
                           min_allowable=min_allowable_het,
                           max_allowable=max_allowable_het)
+    if calc_histogram:
+        counts, bin_edges = histogram(obs_het['obs_het'], n_bins=n_bins, limits=limits)
+        result[FLT_STATS][COUNT] = counts
+        result[FLT_STATS][BIN_EDGES] = bin_edges
+        limits = []
+        if min_allowable_het is not None:
+            limits.append(min_allowable_het)
+        if max_allowable_het is not None:
+            limits.append(max_allowable_het)
+        result[FLT_STATS]['limits'] = limits
 
     return {FLT_VARS: result[FLT_VARS], FLT_ID: filter_id,
             FLT_STATS: result[FLT_STATS]}
@@ -270,16 +320,18 @@ def _add_task_to_pipeline(pipeline_tasks, task):
     pipeline_tasks[FLT_VARS] = task[FLT_VARS]
     if FLT_STATS not in pipeline_tasks:
         pipeline_tasks[FLT_STATS] = OrderedDict()
-    pipeline_tasks[FLT_STATS][task[FLT_ID]] = task[FLT_STATS]
+    if FLT_STATS in task:
+        pipeline_tasks[FLT_STATS][task[FLT_ID]] = task[FLT_STATS]
 
 
 def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
                       samples_to_remove=None, regions_to_remove=None,
-                      regions_to_keep=None,
-                      min_call_rate=None, min_dp_setter=None,
-                      remove_non_variable_snvs=None, max_allowable_mac=None,
-                      max_allowable_het=None, min_call_dp_for_het_call=None,
-                      verbose=True):
+                      regions_to_keep=None, min_call_rate=None,
+                      min_dp_setter=None, remove_non_variable_snvs=None,
+                      max_allowable_mac=None, max_allowable_het=None,
+                      min_call_dp_for_het_call=None, verbose=True,
+                      out_fhand=sys.stdout, calc_histogram=False):
+
     pipeline_tasks = {}
     variations = load_zarr(in_zarr_path)
     max_alleles = variations[ALT_FIELD].shape[1]
@@ -319,18 +371,21 @@ def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
         else:
             max_allowable_mac = len(variations.samples) - max_allowable_mac
         task = filter_by_mac(task[FLT_VARS], max_allowable_mac=max_allowable_mac,
-                             max_alleles=max_alleles)
+                             max_alleles=max_alleles,
+                             calc_histogram=calc_histogram)
         _add_task_to_pipeline(pipeline_tasks, task)
 
     if min_call_rate:
         task = remove_low_call_rate_vars(task[FLT_VARS],
-                                         min_call_rate=min_call_rate)
+                                         min_call_rate=min_call_rate,
+                                         calc_histogram=calc_histogram)
         _add_task_to_pipeline(pipeline_tasks, task)
 
     if max_allowable_het is not None and min_call_dp_for_het_call is not None:
         task = filter_by_obs_heterocigosis(task[FLT_VARS],
                                            max_allowable_het=max_allowable_het,
-                                           min_call_dp_for_het_call=min_call_dp_for_het_call)
+                                           min_call_dp_for_het_call=min_call_dp_for_het_call,
+                                           calc_histogram=calc_histogram)
         _add_task_to_pipeline(pipeline_tasks, task)
 
     delayed_store = prepare_zarr_storage(task[FLT_VARS], out_zarr_path)
@@ -339,12 +394,29 @@ def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
     result = compute(pipeline_tasks, store_variation_to_memory=False)
 
     if verbose:
-        for filter_name, task_result in result[FLT_STATS].items():
+        for filter_id, task_result in result[FLT_STATS].items():
             if N_KEPT in task_result:
                 total = task_result[N_FILTERED_OUT] + task_result[N_KEPT]
-                print(f"Filter: {filter_name}")
-                print("-" * (8 + len(filter_name)))
-                print(f"Processed: {total}")
-                print(f"Kept vars: {task_result[N_KEPT]}")
-                print(f"Filtered out: {task_result[N_FILTERED_OUT]}\n")
+                out_fhand.write(f"Filter: {filter_id}\n")
+                out_fhand.write("-" * (8 + len(filter_id)) + '\n')
+                out_fhand.write(f"Processed: {total}\n")
+                out_fhand.write(f"Kept vars: {task_result[N_KEPT]}\n")
+                out_fhand.write(f"Filtered out: {task_result[N_FILTERED_OUT]}\n\n")
+
+    return result
+
+
+def write_histograms(result, hist_pathdir):
+
+    for filter_id, res in result[FLT_STATS].items():
+        if COUNT in res and BIN_EDGES in res:
+            path = hist_pathdir / (filter_id + '.png')
+
+            xlower, xupper = min(res[BIN_EDGES]), max(res[BIN_EDGES])
+            plot_histogram(res[COUNT], res[BIN_EDGES],
+                           fhand=path.open('wb'),
+                           vlines=res.get('limits', None),
+                           mpl_params={'set_yscale': {'args': ['log']},
+                                       'set_xbound': {'kwargs': {'lower': xlower,
+                                                                 'upper': xupper}}})
 
