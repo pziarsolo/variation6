@@ -84,43 +84,6 @@ def load_zarr(path, chunk_size=DEFAULT_VARIATION_NUM_IN_CHUNK):
     return variations
 
 
-def prepare_zarr_storage_old(variations, out_path):
-    store = zarr.DirectoryStore(str(out_path))
-    root = zarr.group(store=store, overwrite=True)
-    delayed_datasets = []
-    metadata = variations.metadata
-    # samples
-
-    dataset = da.to_zarr(variations.samples, url=str(out_path),
-                         compute=False, component='/samples',
-                         object_codec=numcodecs.VLenUTF8())
-    delayed_datasets.append(dataset)
-
-    variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
-    calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
-    for field, definition in ALLELE_ZARR_DEFINITION_MAPPINGS.items():
-        field_metadata = metadata.get(field, None)
-        array = variations[field]
-        if array is None:
-            continue
-        group_name = definition['group']
-        group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
-        kwargs = {}
-        if array.dtype == object:
-            object_codec = numcodecs.VLenUTF8()
-            kwargs = {'object_codec': object_codec}
-
-        path = os.path.sep + os.path.join(group.path, definition['field'])
-        dataset = da.to_zarr(array, url=str(out_path), compute=False,
-                             component=path, **kwargs)
-
-        if field_metadata:
-            dataset.attrs.put(field_metadata)
-        delayed_datasets.append(dataset)
-
-    return delayed_datasets
-
-
 def prepare_zarr_storage(variations, out_path):
     store = zarr.DirectoryStore(str(out_path))
     root = zarr.group(store=store, overwrite=True)

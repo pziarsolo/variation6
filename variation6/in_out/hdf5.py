@@ -46,6 +46,23 @@ def load_hdf5(path):
     return variations
 
 
+def _create_hdf5_dataset(h5, path, dask_array, field_metadata=None,
+                      growing_dimension=(0,)):
+    max_shape = list(dask_array.shape)
+    for dim in growing_dimension:
+        max_shape[dim] = None
+        max_shape = tuple(max_shape)
+
+    dataset = h5.create_dataset(path, shape=dask_array.shape,
+                                dtype=dask_array.dtype,
+                                maxshape=max_shape)
+    if field_metadata is not None:
+        for key, value in field_metadata.items():
+            dataset.attrs[key] = value
+
+    return dataset
+
+
 def prepare_hdf5_storage(variations, out_path):
     store = h5py.File(str(out_path), mode='w')
 
@@ -53,63 +70,21 @@ def prepare_hdf5_storage(variations, out_path):
     targets = []
     metadata = variations.metadata
     # samples
-    # variants = root.create_group('samples', overwrite=True)
-    sources.append(variations.samples)
-    targets.append(LazyH5Dataset(store, path='/samples'))
+    samples_array = variations.samples
+    samples_array.compute_chunk_sizes()
+
+    sources.append(samples_array)
+    dataset = _create_hdf5_dataset(store, '/samples', samples_array)
+    targets.append(dataset)
 
     for path, array in variations.items():
-
         field_metadata = metadata.get(path, None)
+        array.compute_chunk_sizes()
         sources.append(array)
 
         path = VARIATION_ZARR_FIELD_MAPPING[path]
-        targets.append(LazyH5Dataset(store, path=path, attrs=field_metadata))
+        dataset = _create_hdf5_dataset(store, path, array, field_metadata)
+        targets.append(dataset)
 
     return da.store(sources, targets, compute=False)
 
-
-class LazyH5Dataset():
-
-    def __init__(self, h5, path, growing_dimension=(0,), mapper=None,
-                 attrs=None):
-        # create_dataset
-        self._h5 = h5
-        self._path = path
-        self._growing_dimension = growing_dimension
-        self._dataset = None
-        self._mapper = mapper
-        self._attrs = attrs
-
-    def __setitem__(self, index, chunk):
-
-        if self._dataset is None:
-            if not chunk.size:
-                return
-
-            max_shape = list(chunk.shape)
-            for dim in self._growing_dimension:
-                max_shape[dim] = None
-            max_shape = tuple(max_shape)
-            # dtype = 'str' if chunk.dtype == object else chunk.dtype
-            dtype = chunk.dtype
-            self._dataset = self._h5.create_dataset(self._path, shape=chunk.shape,
-                                                    dtype=dtype, maxshape=max_shape)
-            if self._attrs is not None:
-                for key, value in self._attrs.items():
-                    self._dataset.attrs[key] = value
-
-        # write to dataset
-        if self._mapper is not None:
-            chunk = self._mapper(chunk)
-
-        filled_index = []
-#         print(self._path)
-#         print(index)
-#         print(chunk.shape)
-#         print(chunk)
-        for dim_slice, dim_size in zip(index, chunk.shape):
-            start = dim_slice.start
-            stop = start + dim_size
-            assert dim_slice.step is None
-            filled_index.append(slice(start, stop))
-        self._dataset[tuple(filled_index)] = chunk
