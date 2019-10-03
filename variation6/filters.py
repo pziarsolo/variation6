@@ -1,14 +1,18 @@
+from collections import OrderedDict
+
 import dask.array as da
 import numpy as np
 
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         PUBLIC_CALL_GROUP, N_KEPT, N_FILTERED_OUT,
                         FLT_VARS, CHROM_FIELD, POS_FIELD,
-                        MIN_NUM_GENOTYPES_FOR_POP_STAT)
+                        MIN_NUM_GENOTYPES_FOR_POP_STAT, ALT_FIELD)
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_mac, calc_maf_by_gt, count_alleles,
-    calc_obs_het)
+                              calc_obs_het)
+from variation6.in_out.zarr import load_zarr, prepare_zarr_storage
+from variation6.compute import compute
 
 
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
@@ -88,8 +92,9 @@ def _filter_samples(variations, samples, reverse=False):
 
 
 def _select_vars(variations, stats, min_allowable=None, max_allowable=None):
-    selector_max = None if max_allowable is None else stats <= max_allowable
-    selector_min = None if min_allowable is None else stats >= min_allowable
+    with np.errstate(invalid='ignore'):
+        selector_max = None if max_allowable is None else stats <= max_allowable
+        selector_min = None if min_allowable is None else stats >= min_allowable
 
     if selector_max is None and selector_min is not None:
         selected_vars = selector_min
@@ -205,10 +210,6 @@ def _select_variations_in_region(variations, regions):
     return in_any_region
 
 
-def fake_filter(variations):
-    return {FLT_VARS: variations}
-
-
 def _filter_by_snp_position(variations, regions, filter_id, reverse=False):
     selected_vars = _select_variations_in_region(variations, regions)
     if reverse:
@@ -226,17 +227,92 @@ def _filter_by_snp_position(variations, regions, filter_id, reverse=False):
 
 def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
                                 min_allowable_het=None,
-                                min_allowable_call_dp=None,
-                                max_allowable_call_dp=None,
+                                min_call_dp_for_het_call=None,
+                                max_call_dp_for_het_call=None,
                                 filter_id='obs_het',
                                 min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
 
     obs_het = calc_obs_het(variations, min_num_genotypes=min_num_genotypes,
-                           min_allowable_call_dp=min_allowable_call_dp,
-                           max_allowable_call_dp=max_allowable_call_dp)
+                           min_call_dp_for_het_call=min_call_dp_for_het_call,
+                           max_call_dp_for_het_call=max_call_dp_for_het_call)
 
-    result = _select_vars(variations, obs_het['obs_het'], min_allowable_het,
-                          max_allowable_het)
-
+    result = _select_vars(variations, obs_het['obs_het'],
+                          min_allowable=min_allowable_het,
+                          max_allowable=max_allowable_het)
     return {FLT_VARS: result[FLT_VARS], filter_id: result['stats']}
+
+
+def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
+                      samples_to_remove=None, regions_to_remove=None,
+                      regions_to_keep=None,
+                      min_call_rate=None, min_dp_setter=None,
+                      remove_non_variable_snvs=None, max_allowable_mac=None,
+                      max_allowable_het=None, min_call_dp_for_het_call=None,
+                      verbose=True):
+    pipeline_tasks = OrderedDict()
+    variations = load_zarr(in_zarr_path)
+    max_alleles = variations[ALT_FIELD].shape[1]
+    task = {FLT_VARS: variations}
+
+    if samples_to_keep is not None:
+        task = keep_samples(task[FLT_VARS], samples_to_keep)
+        pipeline_tasks.update(task)
+
+    if samples_to_remove is not None:
+        task = remove_samples(task[FLT_VARS], samples_to_remove)
+        pipeline_tasks.update(task)
+
+    if regions_to_remove is not None:
+        task = remove_variations_in_regions(task[FLT_VARS], regions_to_remove)
+        pipeline_tasks.update(task)
+
+    if regions_to_keep is not None:
+        task = keep_variations_in_regions(task[FLT_VARS], regions_to_keep)
+        pipeline_tasks.update(task)
+
+    if min_dp_setter is not None:
+        task = min_depth_gt_to_missing(task[FLT_VARS], min_depth=min_dp_setter)
+        pipeline_tasks.update(task)
+
+    if remove_non_variable_snvs:
+        task = keep_variable_variations(task[FLT_VARS],
+                                        max_alleles=max_alleles)
+        pipeline_tasks.update(task)
+
+    if max_allowable_mac is not None:
+        if samples_to_keep:
+            max_allowable_mac = len(samples_to_keep) - max_allowable_mac
+        elif samples_to_remove:
+            max_allowable_mac = len(variations.samples) - \
+                len(samples_to_remove) - max_allowable_mac
+        else:
+            max_allowable_mac = len(variations.samples) - max_allowable_mac
+        task = filter_by_mac(task[FLT_VARS], max_allowable_mac=max_allowable_mac,
+                             max_alleles=max_alleles)
+        pipeline_tasks.update(task)
+
+    if min_call_rate:
+        task = remove_low_call_rate_vars(task[FLT_VARS],
+                                         min_call_rate=min_call_rate)
+        pipeline_tasks.update(task)
+
+    if max_allowable_het is not None and min_call_dp_for_het_call is not None:
+        task = filter_by_obs_heterocigosis(task[FLT_VARS],
+                                           max_allowable_het=max_allowable_het,
+                                           min_call_dp_for_het_call=min_call_dp_for_het_call)
+        pipeline_tasks.update(task)
+
+    delayed_store = prepare_zarr_storage(task[FLT_VARS], out_zarr_path)
+    pipeline_tasks[FLT_VARS] = delayed_store
+
+    result = compute(pipeline_tasks, store_variation_to_memory=False)
+    if verbose:
+        for filter_name, task_result in result.items():
+            if N_KEPT in task_result:
+                total = task_result[N_FILTERED_OUT] + task_result[N_KEPT]
+                print(f"Filter: {filter_name}")
+                print("-" * (8 + len(filter_name)))
+                print(f"Processed: {total}")
+                print(f"Kept vars: {task_result[N_KEPT]}")
+                print(f"Filtered out: {task_result[N_FILTERED_OUT]}\n")
 

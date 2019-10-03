@@ -203,7 +203,7 @@ class ObsHetTest(unittest.TestCase):
                            [[0, 0], [0, 0], [0, -1], [-1, -1]]])
 
         dps = np.array([[5, 12, 10, 10],
-                           [10, 10, 10, 10]])
+                        [10, 10, 10, 10]])
         variations[GT_FIELD] = da.from_array(gts)
         variations[DP_FIELD] = da.from_array(dps)
         # with this step we create a  variation with dask arrays of unknown shapes
@@ -215,16 +215,50 @@ class ObsHetTest(unittest.TestCase):
 #         het = calc_obs_het(variations, min_num_genotypes=10)
 #         assert np.allclose(het, [np.NaN, np.NaN], equal_nan=True)
 
-        het = calc_obs_het(variations, min_num_genotypes=0, min_allowable_call_dp=10)
+        het = calc_obs_het(variations, min_num_genotypes=0, min_call_dp_for_het_call=10)
         self.assertTrue(np.allclose(het['obs_het'].compute(), [1, 0]))
-        het = calc_obs_het(variations, min_num_genotypes=0, max_allowable_call_dp=11)
+        het = calc_obs_het(variations, min_num_genotypes=0, max_call_dp_for_het_call=11)
         self.assertTrue(np.allclose(het['obs_het'].compute(), [0, 0]))
 
-        het = calc_obs_het(variations, min_num_genotypes=0, min_allowable_call_dp=5)
+        het = calc_obs_het(variations, min_num_genotypes=0, min_call_dp_for_het_call=5)
         self.assertTrue(np.allclose(het['obs_het'].compute(), [0.5, 0]))
+
+    def test_calc_obs_het2(self):
+
+        gts = np.array([[[0, 0], [0, 1], [0, -1], [-1, -1]],
+                           [[0, 0], [0, 0], [0, -1], [-1, -1]]])
+
+        dps = np.array([[5, 12, 10, 10],
+                           [10, 10, 10, 10]])
+        samples = np.array([str(i) for i in range(gts.shape[1])])
+        variations = Variations(samples=da.array(samples))
+        variations[GT_FIELD] = da.from_array(gts)
+        variations[DP_FIELD] = da.from_array(dps)
+
+        het = calc_obs_het(variations, min_num_genotypes=0)
+        het = compute(het)['obs_het']
+        assert np.allclose(het, [0.5, 0])
+        het = calc_obs_het(variations, min_num_genotypes=10)
+        het = compute(het)['obs_het']
+        assert np.allclose(het, [np.NaN, np.NaN], equal_nan=True)
+
+        het = calc_obs_het(variations, min_num_genotypes=0,
+                           min_call_dp_for_het_call=10)
+        het = compute(het)['obs_het']
+        assert np.allclose(het, [1, 0])
+
+        het = calc_obs_het(variations, min_num_genotypes=0,
+                           max_call_dp_for_het_call=11)
+        het = compute(het)['obs_het']
+        assert np.allclose(het, [0, 0])
+
+        het = calc_obs_het(variations, min_num_genotypes=0,
+                           min_call_dp_for_het_call=5)
+        het = compute(het)['obs_het']
+        assert np.allclose(het, [0.5, 0])
 
 
 if __name__ == '__main__':
-#     import sys; sys.argv = ['', 'StatsTest.test_calc_missing2']
+    # import sys; sys.argv = ['', 'ObsHetTest.test_calc_obs_het']
     unittest.main()
 

@@ -1,9 +1,49 @@
+import math
+import re
 import dask.array as da
 import numpy as np
 
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         RO_FIELD, DP_FIELD, EmptyVariationsError,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT)
+
+DEF_NUM_BINS = 20
+MISSING_VALUES = {}
+
+
+def _calc_histogram(vector, n_bins, range_, weights=None):
+    try:
+        dtype = vector.dtype
+    except AttributeError:
+        dtype = type(vector[0])
+    missing_value = MISSING_VALUES[dtype]
+
+    if weights is None:
+        if math.isnan(missing_value):
+            not_nan = ~np.isnan(vector)
+        else:
+            not_nan = vector != missing_value
+
+        vector = vector[not_nan]
+    try:
+        result = np.histogram(vector, bins=n_bins, range=range_,
+                                 weights=weights)
+    except ValueError as error:
+        if ('parameter must be finite' in str(error) or
+                re.search('autodetected range of .*finite', str(error))):
+            isfinite = ~np.isinf(vector)
+            vector = vector[isfinite]
+            if weights is not None:
+                weights = weights[isfinite]
+            result = np.histogram(vector, bins=n_bins, range=range_,
+                                     weights=weights)
+        else:
+            raise
+    return result
+
+
+def histogram(vector, n_bins=DEF_NUM_BINS, range_=None, weights=None):
+    return _calc_histogram(vector, n_bins, range_=range_, weights=weights)
 
 
 def calc_missing_gt(variations, rates=True):
@@ -91,18 +131,18 @@ def _calc_mac(gts, max_alleles):
     gt_counts = count_alleles(gts, max_alleles=max_alleles)
     if gt_counts is None:
         return np.array([])
-#     print(gt_counts)
+
     missing_allele_idx = -1  # it's allways in the last position
     num_missing = np.copy(gt_counts[:, missing_allele_idx])
     gt_counts[:, missing_allele_idx] = 0
-#     print(gt_counts)
+
     max_ = np.amax(gt_counts, axis=1)
-#     print(max_)
+
     num_samples = gts.shape[1]
     ploidy = gts.shape[2]
     num_chroms = num_samples * ploidy
     mac = num_samples - (num_chroms - num_missing - max_) / ploidy
-#     print(gts.shape, mac)
+
     # we set the snps with no data to nan
     mac[max_ == 0] = np.nan
     return mac
@@ -112,7 +152,6 @@ def calc_mac(variations, max_alleles,
              min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
     gts = variations[GT_FIELD]
     # determine output chunks - preserve axis0; change axis1, axis2
-
 #     chunks = (gts.chunks[0])
     chunks = None
 
@@ -128,8 +167,7 @@ def calc_mac(variations, max_alleles,
 def _call_is_hom_in_memory(gts):
     is_hom = da.full(gts.shape[:-1], True, dtype=np.bool)
     for idx in range(1, gts.shape[2]):
-        is_hom = da.logical_and(gts[:, :, idx] == gts[:, :, idx - 1],
-                                   is_hom)
+        is_hom = da.logical_and(gts[:, :, idx] == gts[:, :, idx - 1], is_hom)
     return is_hom
 
 
@@ -150,16 +188,17 @@ def _call_is_het(variations, is_missing=None):
     return is_het
 
 
-def _calc_obs_het_counts(variations, axis, min_call_dp, max_call_dp=None):
+def _calc_obs_het_counts(variations, axis, min_call_dp_for_het_call,
+                         max_call_dp_for_het_call=None):
     is_missing = da.any(variations[GT_FIELD] == MISSING_INT, axis=2)
 
-    if min_call_dp or max_call_dp:
+    if min_call_dp_for_het_call is not None or max_call_dp_for_het_call is not None:
         dps = variations[DP_FIELD]
-        if min_call_dp:
-            low_dp = dps < min_call_dp
+        if min_call_dp_for_het_call is not None:
+            low_dp = dps < min_call_dp_for_het_call
             is_missing = da.logical_or(is_missing, low_dp)
-        if max_call_dp:
-            high_dp = dps > max_call_dp
+        if max_call_dp_for_het_call is not None:
+            high_dp = dps > max_call_dp_for_het_call
             is_missing = da.logical_or(is_missing, high_dp)
     is_het = _call_is_het(variations, is_missing=is_missing)
 #     if is_het.shape[0] == 0:
@@ -169,15 +208,17 @@ def _calc_obs_het_counts(variations, axis, min_call_dp, max_call_dp=None):
 
 
 def calc_obs_het(variations, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
-                 min_allowable_call_dp=0, max_allowable_call_dp=None):
+                 min_call_dp_for_het_call=0, max_call_dp_for_het_call=None):
+
     het, called_gts = _calc_obs_het_counts(variations, axis=1,
-                                           min_call_dp=min_allowable_call_dp,
-                                           max_call_dp=max_allowable_call_dp)
+                                           min_call_dp_for_het_call=min_call_dp_for_het_call,
+                                           max_call_dp_for_het_call=max_call_dp_for_het_call)
     # To avoid problems with NaNs
     with np.errstate(invalid='ignore'):
         het = het / called_gts
 
-    return {'obs_het': _mask_stats_with_few_samples(het, variations, min_num_genotypes)}
+    return {'obs_het': _mask_stats_with_few_samples(het, variations, min_num_genotypes,
+                                                    num_called_gts=called_gts)}
 
 
 def calc_called_gt(variations, rates=True):
@@ -201,7 +242,7 @@ def _get_mask_for_masking_samples_with_few_gts(variations, min_num_genotypes,
 
 def _mask_stats_with_few_samples(stats, variations, min_num_genotypes,
                                  num_called_gts=None, masking_value=np.NaN):
-    if min_num_genotypes:
+    if min_num_genotypes is not None:
         mask = _get_mask_for_masking_samples_with_few_gts(variations,
                                                           min_num_genotypes,
                                                           num_called_gts=num_called_gts)
