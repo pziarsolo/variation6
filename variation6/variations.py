@@ -1,7 +1,8 @@
 import math
 import numpy as np
 
-from variation6 import PUBLIC_CALL_GROUP, GT_FIELD, EmptyVariationsError
+from variation6 import PUBLIC_CALL_GROUP, GT_FIELD, EmptyVariationsError, \
+    DEF_CHUNK_SIZE
 
 # ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
 
@@ -106,5 +107,15 @@ class Variations:
             variations[key] = array[index, ...]
         return variations
 
+    def keys(self):
+        return self._arrays.keys()
+
     def items(self):
         return self._arrays.items()
+
+    def iterate_chunks(self, chunk_size=DEF_CHUNK_SIZE):
+        chunk_indices = list(range(0, self.num_variations, chunk_size))
+        for chunk_start in chunk_indices:
+            index = slice(chunk_start, chunk_start + chunk_size)
+            yield self.get_vars(index)
+

@@ -45,6 +45,15 @@ class VariationsTest(unittest.TestCase):
         self.assertTrue(np.array_equal(gts, variations[GT_FIELD]))
         self.assertEqual(variations.num_variations, 3)
 
+    def test_iterate_chunks(self):
+        variations = Variations()
+        variations.samples = ['1', '2', '3']
+        gts = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3]])
+        variations[GT_FIELD] = gts
+        for index, chunk in enumerate(variations.iterate_chunks(chunk_size=1)):
+            assert np.all(chunk[GT_FIELD] == variations[GT_FIELD][index, :])
+            assert np.all(chunk.samples == variations.samples)
+
 
 if __name__ == "__main__":
     unittest.main()
