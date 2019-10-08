@@ -5,14 +5,15 @@ import dask.array as da
 import math
 
 from variation6 import (GT_FIELD, AO_FIELD, RO_FIELD, DP_FIELD,
-                        EmptyVariationsError, FLT_VARS)
+                        EmptyVariationsError, FLT_VARS, ALT_FIELD)
 from variation6.in_out.zarr import load_zarr
 from variation6.tests import TEST_DATA_DIR
 from variation6.compute import compute
 from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_maf_by_gt, calc_mac, count_alleles,
-                              calc_obs_het)
+                              calc_obs_het, calc_expected_het,
+    calc_allele_freq, calc_unbias_expected_het)
 from variation6.filters import remove_low_call_rate_vars, keep_samples
 
 
@@ -258,7 +259,50 @@ class ObsHetTest(unittest.TestCase):
         assert np.allclose(het, [0.5, 0])
 
 
+class AlleleFreqTests(unittest.TestCase):
+
+    def test_allele_freq(self):
+
+        gts = np.array([[[0, 0], [1, 1], [0, -1], [-1, -1]],
+                        [[0, -1], [0, 0], [0, -1], [-1, -1]],
+                        [[0, 1], [0, 2], [0, 0], [-1, -1]]])
+        samples = ['1', '2', '3', '4']
+        variations = Variations(samples=da.from_array(samples))
+        variations[GT_FIELD] = da.from_array(gts)
+        variations[ALT_FIELD] = da.zeros((3, 2))
+
+        allele_freq = calc_allele_freq(variations, max_alleles=3,
+                                       min_num_genotypes=0)
+        allele_freq = allele_freq.compute()
+        expected = np.array([[0.6, 0.4, 0], [1, 0, 0], [4 / 6, 1 / 6, 1 / 6]])
+        assert np.allclose(allele_freq, expected)
+
+
+class ExpectedHetTest(unittest.TestCase):
+
+    def test_expected_het(self):
+        gts = da.from_array(np.array(
+            [[[0, 0], [0, 0], [0, 0], [1, 1], [1, 1], [1, 1], [1, 0]],
+              [[0, 0], [0, 0], [0, 0], [1, 1], [1, 1], [1, 1], [1, 1]],
+              [[0, 0], [0, 0], [0, 0], [1, 1], [1, 1], [1, 1], [1, 1]]]))
+
+        samples = np.array([str(i) for i in range(gts.shape[1])])
+        variations = Variations(samples=da.array(samples))
+        variations[GT_FIELD] = gts
+        exp = [0.5, 0.48979592, 0.48979592]
+        task = calc_expected_het(variations, max_alleles=3, min_num_genotypes=0)
+        result = compute(task)
+        assert np.allclose(result['expected_het'], exp)
+
+        # unbias
+        exp = [0.53846154, 0.52747253, 0.52747253]
+        task = calc_unbias_expected_het(variations, max_alleles=3,
+                                        min_num_genotypes=0)
+        result = compute(task)
+        assert np.allclose(result['expected_het'], exp)
+
+
 if __name__ == '__main__':
-    # import sys; sys.argv = ['', 'ObsHetTest.test_calc_obs_het']
+    import sys; sys.argv = ['', 'ExpectedHetTest']
     unittest.main()
 

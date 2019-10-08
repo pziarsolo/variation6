@@ -1,5 +1,6 @@
 import math
 import re
+import dask
 import dask.array as da
 import numpy as np
 
@@ -236,6 +237,59 @@ def calc_called_gt(variations, rates=True):
         return bool_gts.sum(axis=(1, 2)) / ploidy
 
 
+def calc_allele_freq(variations, max_alleles,
+                     min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+    gts = variations[GT_FIELD]
+
+    if gts.shape[0] == 0:
+        return da.from_array(np.array([]))
+
+    allele_counts = count_alleles(gts, max_alleles, count_missing=False)
+    if allele_counts is None:
+        raise ValueError('No alleles, everything is missing data')
+
+    total_counts = da.sum(allele_counts, axis=1)
+
+    allele_freq = allele_counts / total_counts[:, None]
+
+    allele_freq = _mask_stats_with_few_samples(allele_freq, variations, min_num_genotypes)
+
+    return allele_freq
+
+
+def calc_expected_het(variations, max_alleles,
+                      min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+    try:
+        allele_freq = calc_allele_freq(variations, max_alleles=max_alleles,
+                                       min_num_genotypes=min_num_genotypes)
+    except ValueError:
+        exp_het = da.empty((variations.num_variations,))
+        exp_het[:] = np.nan
+        return exp_het
+
+    if allele_freq.shape[0] == 0:
+        return da.from_array(np.array([]))
+    gts = variations[GT_FIELD]
+    ploidy = gts.shape[2]
+    exp_het = 1 - da.sum(allele_freq ** ploidy, axis=1)
+
+    return {'expected_het': exp_het}
+
+
+def calc_unbias_expected_het(variations, max_alleles,
+                             min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
+
+    exp_het = calc_expected_het(variations, max_alleles=max_alleles,
+                                min_num_genotypes=min_num_genotypes)['expected_het']
+
+    num_called_gts = calc_called_gt(variations, rates=False)
+    num_samples = num_called_gts.astype(float)
+    num_samples[num_samples < min_num_genotypes] = np.nan
+
+    unbiased_exp_het = (2 * num_samples / (2 * num_samples - 1)) * exp_het
+    return  {'expected_het': unbiased_exp_het}
+
+
 def _get_mask_for_masking_samples_with_few_gts(variations, min_num_genotypes,
                                                num_called_gts=None):
     if num_called_gts is None:
@@ -250,5 +304,6 @@ def _mask_stats_with_few_samples(stats, variations, min_num_genotypes,
         mask = _get_mask_for_masking_samples_with_few_gts(variations,
                                                           min_num_genotypes,
                                                           num_called_gts=num_called_gts)
+
         stats[mask] = masking_value
     return stats
