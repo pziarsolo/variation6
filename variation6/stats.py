@@ -320,7 +320,7 @@ def calc_percentaje(*args):
 
 
 def calc_diversities(variations, max_alleles, min_num_genotypes,
-                     polymorphic_threshold):
+                     polymorphic_threshold=0.95):
     diversities = {}
 
     mafs = calc_maf_by_gt(variations, max_alleles,
