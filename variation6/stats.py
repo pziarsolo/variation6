@@ -310,30 +310,13 @@ def _mask_stats_with_few_samples(stats, variations, min_num_genotypes,
     return stats
 
 
-def _calc_percent_variables_in_mem(mafs_no_nan, num_variables):
-    return (num_variables / mafs_no_nan.shape[0]) * 100
-
-
-def _calc_percent_variables(num_variables, mafs_no_nan):
-
-    chunks = None
-    args = [num_variables, mafs_no_nan]
-    result = da.map_blocks(_calc_percentaje, *args,
-                           chunks=chunks, dtype=np.float64)
-    return result
-
-
 def _calc_percentaje(total, matrix_with_condition):
     return (total / matrix_with_condition.shape[0]) * 100
 
 
-def _calc_percent_polimorfic(num_poly, snp_is_poly):
-    chunks = None
-    args = [num_poly, snp_is_poly]
-    result = da.map_blocks(_calc_percentaje,
-                           * args,
-                           chunks=chunks, dtype=np.float64)
-    return result
+def calc_percentaje(*args):
+    return da.map_blocks(_calc_percentaje, *args, chunks=None,
+                         dtype=np.float64)
 
 
 def calc_diversities(variations, max_alleles, min_num_genotypes,
@@ -349,14 +332,13 @@ def calc_diversities(variations, max_alleles, min_num_genotypes,
 
     diversities['num_variable_vars'] = num_variable_vars
 
-    percent_variable_vars = _calc_percent_variables(num_variable_vars,
-                                                    mafs_no_nan)
+    percent_variable_vars = calc_percentaje(num_variable_vars, mafs_no_nan)
     diversities['percent_variable_vars'] = percent_variable_vars
 
     snp_is_poly = mafs_no_nan <= polymorphic_threshold
     num_poly = da.sum(snp_is_poly)
-    diversities['percent_polymorphic_vars'] = _calc_percent_polimorfic(num_poly,
-                                                                       snp_is_poly)
+    diversities['percent_polymorphic_vars'] = calc_percentaje(num_poly,
+                                                              snp_is_poly)
     diversities['num_polymorphic_vars'] = num_poly
 
     exp_het = calc_expected_het(variations, max_alleles=max_alleles,
