@@ -13,7 +13,7 @@ from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_maf_by_gt, calc_mac, count_alleles,
                               calc_obs_het, calc_expected_het,
-    calc_allele_freq, calc_unbias_expected_het)
+                              calc_allele_freq, calc_unbias_expected_het)
 from variation6.filters import remove_low_call_rate_vars, keep_samples
 
 
@@ -305,6 +305,6 @@ class ExpectedHetTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-#     import sys; sys.argv = ['', 'ExpectedHetTest']
+#     import sys; sys.argv = ['', 'StatsTest.test_calc_maf_by_gt']
     unittest.main()
 

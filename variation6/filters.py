@@ -103,9 +103,8 @@ def _filter_samples(variations, samples, reverse=False):
 
 
 def _select_vars(variations, stats, min_allowable=None, max_allowable=None):
-    with np.errstate(invalid='ignore'):
-        selector_max = None if max_allowable is None else stats <= max_allowable
-        selector_min = None if min_allowable is None else stats >= min_allowable
+    selector_max = None if max_allowable is None else stats <= max_allowable
+    selector_min = None if min_allowable is None else stats >= min_allowable
 
     if selector_max is None and selector_min is not None:
         selected_vars = selector_min
