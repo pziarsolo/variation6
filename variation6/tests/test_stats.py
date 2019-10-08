@@ -13,7 +13,8 @@ from variation6.variations import Variations
 from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
                               calc_maf_by_gt, calc_mac, count_alleles,
                               calc_obs_het, calc_expected_het,
-                              calc_allele_freq, calc_unbias_expected_het)
+                              calc_allele_freq, calc_unbias_expected_het,
+    calc_diversities)
 from variation6.filters import remove_low_call_rate_vars, keep_samples
 
 
@@ -279,6 +280,21 @@ class AlleleFreqTests(unittest.TestCase):
         expected = np.array([[0.6, 0.4, 0], [1, 0, 0], [4 / 6, 1 / 6, 1 / 6]])
         assert np.allclose(allele_freq, expected)
 
+    def test_allele_freq_with_variations(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+#         variations = remove_low_call_rate_vars(variations, min_call_rate=0,
+#                                                calc_histogram=False)[FLT_VARS]
+
+        max_alleles = variations[ALT_FIELD].shape[1] + 1
+        task = calc_allele_freq(variations, max_alleles=max_alleles,
+                                min_num_genotypes=0)
+        result = compute(task, silence_runtime_warnings=True)
+        expected = np.array([[0.5, 0.5, 0.0, 0.0], [0.5, 0.5, 0.0, 0.0],
+                             [0.5, 0.5, 0.0, 0.0], [0.75, 0.25, 0.0, 0.0],
+                             [np.nan, np.nan, np.nan, np.nan],
+                             [0.5, 0.5, 0.0, 0.0], [0.25, 0.75, 0.0, 0.0]])
+        np.testing.assert_allclose(result, expected, equal_nan=True)
+
 
 class ExpectedHetTest(unittest.TestCase):
 
@@ -303,8 +319,34 @@ class ExpectedHetTest(unittest.TestCase):
         result = compute(task)
         assert np.allclose(result, exp)
 
+    def test_expected_het_with_real(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        max_alleles = variations[ALT_FIELD].shape[1] + 1
+        task = calc_expected_het(variations, max_alleles=max_alleles,
+                                 min_num_genotypes=0)
+        result = compute(task, silence_runtime_warnings=True)
+        np.testing.assert_allclose(result, [0.5, 0.5, 0.5, 0.375, np.nan, 0.5,
+                                            0.375], equal_nan=True)
+
+
+class DiversitiesTests(unittest.TestCase):
+
+    def test_calc_diversitios(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        max_alleles = variations[ALT_FIELD].shape[1] + 1
+
+        task = calc_diversities(variations, max_alleles=max_alleles,
+                                min_num_genotypes=0, polymorphic_threshold=0.5)
+        result = compute(task, silence_runtime_warnings=True)
+        self.assertAlmostEqual(result['num_variable_vars'], 6)
+        self.assertAlmostEqual(result['percent_variable_vars'], 100.0)
+        self.assertAlmostEqual(result['percent_polymorphic_vars'], 66.666, places=2)
+        self.assertAlmostEqual(result['num_polymorphic_vars'], 4, places=2)
+        self.assertAlmostEqual(result['exp_het'], 0.458, places=2)
+        self.assertAlmostEqual(result['obs_het'], 0.333, places=2)
+
 
 if __name__ == '__main__':
-#     import sys; sys.argv = ['', 'StatsTest.test_calc_maf_by_gt']
+    # import sys; sys.argv = ['', 'AlleleFreqTests']
     unittest.main()
 

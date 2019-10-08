@@ -202,10 +202,11 @@ CUUC00029_TC01    34    .    A    G    .    .    .    GT:AO:DP:GQ:GT:RO    .:.:.
         with NamedTemporaryFile(mode='wb') as out_fhand:
             zarr_to_vcf(zarr_path, out_fhand, chunk_size=1)
             out_fhand.flush()
-            result_vcf = open(out_fhand.name, 'r').read()
-            assert expected_vcf in result_vcf
+            with open(out_fhand.name, 'r') as in_fhand:
+                result_vcf = in_fhand.read()
+                assert expected_vcf in result_vcf
 
 
 if __name__ == '__main__':
-    import sys; sys.argv = ['.', 'VcfTest']
+    # import sys; sys.argv = ['.', 'VcfTest']
     unittest.main()

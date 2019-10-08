@@ -1,12 +1,13 @@
+import os.path
+
 import allel
-import dask.array as da
 import zarr
 import numcodecs
-import os.path
+import dask.array as da
 
 from variation6 import (CHROM_FIELD, POS_FIELD, ID_FIELD, REF_FIELD, ALT_FIELD,
                         QUAL_FIELD, GT_FIELD, GQ_FIELD, DP_FIELD, AO_FIELD,
-                        RO_FIELD, AD_FIELD, INDEX_FIELD)
+                        RO_FIELD, AD_FIELD)
 from variation6.variations import Variations
 
 DEFAULT_VARIATION_NUM_IN_CHUNK = 40000
@@ -78,8 +79,6 @@ def load_zarr(path, chunk_size=DEFAULT_VARIATION_NUM_IN_CHUNK):
 
             variations[field] = da.from_zarr(array, chunks=chunks)
     variations.metadata = metadata
-    variations[INDEX_FIELD] = da.arange(0, variations.num_variations,
-                                        dtype=int)
 
     return variations
 
@@ -106,10 +105,7 @@ def prepare_zarr_storage(variations, out_path):
     variants = root.create_group(ZARR_VARIANTS_GROUP_NAME, overwrite=True)
     calls = root.create_group(ZARR_CALL_GROUP_NAME, overwrite=True)
     for field, array in variations.items():
-        if field == INDEX_FIELD:
-            definition = None
-        else:
-            definition = ALLELE_ZARR_DEFINITION_MAPPINGS[field]
+        definition = ALLELE_ZARR_DEFINITION_MAPPINGS[field]
 
         field_metadata = metadata.get(field, None)
         array = variations[field]
@@ -117,12 +113,10 @@ def prepare_zarr_storage(variations, out_path):
             continue
         array.compute_chunk_sizes()
         sources.append(array)
-        if definition is not None:
-            group_name = definition['group']
-            group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
-            path = os.path.sep + os.path.join(group.path, definition['field'])
-        else:
-            path = INDEX_FIELD
+
+        group_name = definition['group']
+        group = calls if group_name == ZARR_CALL_GROUP_NAME else variants
+        path = os.path.sep + os.path.join(group.path, definition['field'])
 
         object_codec = None
         if array.dtype == object:

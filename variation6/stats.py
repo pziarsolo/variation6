@@ -250,7 +250,6 @@ def calc_allele_freq(variations, max_alleles,
     total_counts = da.sum(allele_counts, axis=1)
 
     allele_freq = allele_counts / total_counts[:, None]
-
     allele_freq = _mask_stats_with_few_samples(allele_freq, variations, min_num_genotypes)
 
     return allele_freq
@@ -265,7 +264,6 @@ def calc_expected_het(variations, max_alleles,
         exp_het = da.empty((variations.num_variations,))
         exp_het[:] = np.nan
         return exp_het
-
     if allele_freq.shape[0] == 0:
         return da.from_array(np.array([]))
     gts = variations[GT_FIELD]
@@ -304,5 +302,68 @@ def _mask_stats_with_few_samples(stats, variations, min_num_genotypes,
                                                           min_num_genotypes,
                                                           num_called_gts=num_called_gts)
 
+        if (not np.any(np.isnan(stats.shape)) and
+                len(stats.shape) != len(mask.shape)):
+            mask = mask.reshape((stats.shape))
+
         stats[mask] = masking_value
     return stats
+
+
+def _calc_percent_variables_in_mem(mafs_no_nan, num_variables):
+    return (num_variables / mafs_no_nan.shape[0]) * 100
+
+
+def _calc_percent_variables(num_variables, mafs_no_nan):
+
+    chunks = None
+    args = [num_variables, mafs_no_nan]
+    result = da.map_blocks(_calc_percentaje, *args,
+                           chunks=chunks, dtype=np.float64)
+    return result
+
+
+def _calc_percentaje(total, matrix_with_condition):
+    return (total / matrix_with_condition.shape[0]) * 100
+
+
+def _calc_percent_polimorfic(num_poly, snp_is_poly):
+    chunks = None
+    args = [num_poly, snp_is_poly]
+    result = da.map_blocks(_calc_percentaje,
+                           * args,
+                           chunks=chunks, dtype=np.float64)
+    return result
+
+
+def calc_diversities(variations, max_alleles, min_num_genotypes,
+                     polymorphic_threshold):
+    diversities = {}
+
+    mafs = calc_maf_by_gt(variations, max_alleles,
+                          min_num_genotypes=min_num_genotypes)
+
+    mafs_no_nan = mafs[da.logical_not(da.isnan(mafs))]
+
+    num_variable_vars = da.sum(mafs_no_nan < 0.9999999999)
+
+    diversities['num_variable_vars'] = num_variable_vars
+
+    percent_variable_vars = _calc_percent_variables(num_variable_vars,
+                                                    mafs_no_nan)
+    diversities['percent_variable_vars'] = percent_variable_vars
+
+    snp_is_poly = mafs_no_nan <= polymorphic_threshold
+    num_poly = da.sum(snp_is_poly)
+    diversities['percent_polymorphic_vars'] = _calc_percent_polimorfic(num_poly,
+                                                                       snp_is_poly)
+    diversities['num_polymorphic_vars'] = num_poly
+
+    exp_het = calc_expected_het(variations, max_alleles=max_alleles,
+                                min_num_genotypes=min_num_genotypes)
+    diversities['exp_het'] = da.nanmean(exp_het)
+
+    obs_het = calc_obs_het(variations, min_num_genotypes=min_num_genotypes)
+    diversities['obs_het'] = da.nanmean(obs_het)
+
+    return diversities
