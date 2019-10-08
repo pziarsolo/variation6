@@ -46,7 +46,8 @@ def _collect_cargo_to_compute(data, store_variation_to_memory,
     return darrays_to_compute, orig_keys, orig_dicts, variation_info
 
 
-def compute(data, store_variation_to_memory=False, silence_runtime_warnings=True):
+def compute(data, store_variation_to_memory=False,
+            silence_runtime_warnings=False):
     if isinstance(data, (Delayed, da.Array)):
         with warnings.catch_warnings():
             if silence_runtime_warnings:

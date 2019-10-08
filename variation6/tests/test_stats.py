@@ -154,7 +154,7 @@ class StatsTest(unittest.TestCase):
 
         mafs = calc_maf_by_gt(variations, max_alleles=3,
                               min_num_genotypes=0)
-        result = compute(mafs)
+        result = compute(mafs, silence_runtime_warnings=True)
 
         expected = [0.5, 0.33333333, 0.5, math.nan]
         for a, b in zip(result, expected):
