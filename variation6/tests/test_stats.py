@@ -61,14 +61,14 @@ class StatsTest(unittest.TestCase):
     def test_calc_missing(self):
         variations = _create_dask_variations()
         variations = keep_samples(variations, samples=['pepo', 'upv196'])[FLT_VARS]
-        future_result = calc_missing_gt(variations, rates=False)
-        result = compute(future_result)
+        task = calc_missing_gt(variations, rates=False)
+        result = compute({'num_missing_gts': task})
         self.assertTrue(np.array_equal(result['num_missing_gts'],
                                        [1, 1, 1, 0, 2, 2, 1]))
         variations = _create_dask_variations()
         variations = keep_samples(variations, samples=['pepo', 'upv196'])[FLT_VARS]
-        future_result = calc_missing_gt(variations, rates=True)
-        result = compute(future_result)
+        task = calc_missing_gt(variations, rates=True)
+        result = compute({'num_missing_gts': task})
         expected = [0.5, 0.5, 0.5, 0, 1, 1, 0.5]
         for a, b in zip(result['num_missing_gts'], expected):
             self.assertAlmostEqual(a, b, places=2)
@@ -83,8 +83,10 @@ class StatsTest(unittest.TestCase):
         variations.samples = samples
         variations[GT_FIELD] = gts
 
-        future_result = calc_missing_gt(variations, rates=False)
-        result = compute(future_result)['num_missing_gts']
+        result = calc_missing_gt(variations, rates=False)
+#         result = compute(task)
+#         print('result', result)
+#         result = compute(result)['num_missing_gts']
 
         expected = np.array([2, 1, 1, 0])
         assert np.all(result == 2 - expected)
@@ -97,8 +99,8 @@ class StatsTest(unittest.TestCase):
         variations = Variations()
         variations.samples = samples
         variations[GT_FIELD] = gts
-        future_result = calc_missing_gt(variations, rates=False)
-        result = compute(future_result)['num_missing_gts']
+        result = calc_missing_gt(variations, rates=False)
+#         result = compute(task)
         expected = np.array([0.5, 1, 2, 4])
         assert np.all(result == expected)
 
@@ -107,7 +109,7 @@ class StatsTest(unittest.TestCase):
 
         task = calc_missing_gt(variations, rates=True)
         result = compute(task)
-        self.assertEqual(result['num_missing_gts'].shape, (0,))
+        self.assertEqual(result.shape, (0,))
 #         with self.assertRaises(EmptyVariationsError):
 
     def test_calc_maf_by_allele_count(self):
@@ -128,14 +130,14 @@ class StatsTest(unittest.TestCase):
         result = compute(future_result)
 
         expected = [0.5, 0.5, 0.47619048]
-        for a, b in zip(result['mafs'], expected):
+        for a, b in zip(result, expected):
             self.assertAlmostEqual(a, b, places=2)
 
     def test_calc_maf_by_allele_count_empty_vars(self):
         variations = _create_empty_dask_variations()
         task = calc_maf_by_allele_count(variations)
         result = compute(task)
-        self.assertEqual(result['mafs'].shape, (0,))
+        self.assertEqual(result.shape, (0,))
 
     def test_calc_maf_by_gt(self):
         variations = Variations(samples=da.array(['aa', 'bb']))
@@ -155,7 +157,7 @@ class StatsTest(unittest.TestCase):
         result = compute(mafs)
 
         expected = [0.5, 0.33333333, 0.5, math.nan]
-        for a, b in zip(result['mafs'], expected):
+        for a, b in zip(result, expected):
             if math.isnan(a):
                 self.assertTrue(math.isnan(b))
                 continue
@@ -177,7 +179,7 @@ class StatsTest(unittest.TestCase):
         macs = calc_mac(variations, max_alleles=3, min_num_genotypes=0)
         result = compute(macs)
         expected = [2, 1, 1, math.nan]
-        for a, b in zip(result['macs'], expected):
+        for a, b in zip(result, expected):
             if math.isnan(a):
                 self.assertTrue(math.isnan(b))
                 continue
@@ -192,7 +194,7 @@ class StatsTest(unittest.TestCase):
 
         # with this step we create a  variation wi
         result = calc_mac(variations, max_alleles=3, min_num_genotypes=1)
-        macs = compute(result)['macs']
+        macs = compute(result)
         assert np.allclose(macs, np.array([4, 2, 3, np.NaN]), equal_nan=True)
 
 
@@ -211,18 +213,18 @@ class ObsHetTest(unittest.TestCase):
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
 
         het = calc_obs_het(variations, min_num_genotypes=0)
-        self.assertTrue(np.allclose(het['obs_het'].compute(), [0.5, 0]))
+        self.assertTrue(np.allclose(het.compute(), [0.5, 0]))
 
 #         het = calc_obs_het(variations, min_num_genotypes=10)
 #         assert np.allclose(het, [np.NaN, np.NaN], equal_nan=True)
 
         het = calc_obs_het(variations, min_num_genotypes=0, min_call_dp_for_het_call=10)
-        self.assertTrue(np.allclose(het['obs_het'].compute(), [1, 0]))
+        self.assertTrue(np.allclose(het.compute(), [1, 0]))
         het = calc_obs_het(variations, min_num_genotypes=0, max_call_dp_for_het_call=11)
-        self.assertTrue(np.allclose(het['obs_het'].compute(), [0, 0]))
+        self.assertTrue(np.allclose(het.compute(), [0, 0]))
 
         het = calc_obs_het(variations, min_num_genotypes=0, min_call_dp_for_het_call=5)
-        self.assertTrue(np.allclose(het['obs_het'].compute(), [0.5, 0]))
+        self.assertTrue(np.allclose(het.compute(), [0.5, 0]))
 
     def test_calc_obs_het2(self):
 
@@ -237,25 +239,25 @@ class ObsHetTest(unittest.TestCase):
         variations[DP_FIELD] = da.from_array(dps)
 
         het = calc_obs_het(variations, min_num_genotypes=0)
-        het = compute(het)['obs_het']
+        het = compute(het)
         assert np.allclose(het, [0.5, 0])
         het = calc_obs_het(variations, min_num_genotypes=10)
-        het = compute(het)['obs_het']
+        het = compute(het)
         assert np.allclose(het, [np.NaN, np.NaN], equal_nan=True)
 
         het = calc_obs_het(variations, min_num_genotypes=0,
                            min_call_dp_for_het_call=10)
-        het = compute(het)['obs_het']
+        het = compute(het)
         assert np.allclose(het, [1, 0])
 
         het = calc_obs_het(variations, min_num_genotypes=0,
                            max_call_dp_for_het_call=11)
-        het = compute(het)['obs_het']
+        het = compute(het)
         assert np.allclose(het, [0, 0])
 
         het = calc_obs_het(variations, min_num_genotypes=0,
                            min_call_dp_for_het_call=5)
-        het = compute(het)['obs_het']
+        het = compute(het)
         assert np.allclose(het, [0.5, 0])
 
 
@@ -292,17 +294,17 @@ class ExpectedHetTest(unittest.TestCase):
         exp = [0.5, 0.48979592, 0.48979592]
         task = calc_expected_het(variations, max_alleles=3, min_num_genotypes=0)
         result = compute(task)
-        assert np.allclose(result['expected_het'], exp)
+        assert np.allclose(result, exp)
 
         # unbias
         exp = [0.53846154, 0.52747253, 0.52747253]
         task = calc_unbias_expected_het(variations, max_alleles=3,
                                         min_num_genotypes=0)
         result = compute(task)
-        assert np.allclose(result['expected_het'], exp)
+        assert np.allclose(result, exp)
 
 
 if __name__ == '__main__':
-    import sys; sys.argv = ['', 'ExpectedHetTest']
+#     import sys; sys.argv = ['', 'ExpectedHetTest']
     unittest.main()
 

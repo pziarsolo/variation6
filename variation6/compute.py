@@ -106,6 +106,8 @@ def _collect_cargo_to_compute(data, store_variation_to_memory,
 
 
 def compute(data, store_variation_to_memory=False):
+    if isinstance(data, (Delayed, da.Array)):
+        return data.compute()
 
     res = _collect_cargo_to_compute(data,
                                     store_variation_to_memory=store_variation_to_memory)

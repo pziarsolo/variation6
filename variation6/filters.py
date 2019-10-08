@@ -21,7 +21,7 @@ from variation6.plot import plot_histogram
 def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
                               filter_id='call_rate', calc_histogram=False,
                               n_bins=DEF_NUM_BINS, limits=None):
-    num_missing_gts = calc_missing_gt(variations, rates=rates)['num_missing_gts']
+    num_missing_gts = calc_missing_gt(variations, rates=rates)
     if rates:
         num_called = 1 - num_missing_gts
     else:
@@ -141,10 +141,10 @@ def filter_by_maf_by_allele_count(variations, max_allowable_maf=None,
     mafs = calc_maf_by_allele_count(variations,
                                     min_num_genotypes=min_num_genotypes)
     # print(compute(mafs))
-    result = _select_vars(variations, mafs['mafs'], min_allowable_maf, max_allowable_maf)
+    result = _select_vars(variations, mafs, min_allowable_maf, max_allowable_maf)
 
     if calc_histogram:
-        counts, bin_edges = histogram(mafs['mafs'], n_bins=n_bins, limits=limits)
+        counts, bin_edges = histogram(mafs, n_bins=n_bins, limits=limits)
         result[FLT_STATS][COUNT] = counts
         result[FLT_STATS][BIN_EDGES] = bin_edges
         limits = []
@@ -165,11 +165,11 @@ def filter_by_maf(variations, max_alleles, max_allowable_maf=None,
     mafs = calc_maf_by_gt(variations, max_alleles=max_alleles,
                           min_num_genotypes=min_num_genotypes)
 
-    result = _select_vars(variations, mafs['mafs'], min_allowable_maf,
+    result = _select_vars(variations, mafs, min_allowable_maf,
                           max_allowable_maf)
 
     if calc_histogram:
-        counts, bin_edges = histogram(mafs['mafs'], n_bins=n_bins, limits=limits)
+        counts, bin_edges = histogram(mafs, n_bins=n_bins, limits=limits)
         result[FLT_STATS][COUNT] = counts
         result[FLT_STATS][BIN_EDGES] = bin_edges
         limits = []
@@ -191,10 +191,10 @@ def filter_by_mac(variations, max_alleles, max_allowable_mac=None,
                     min_num_genotypes=min_num_genotypes)
     # print(compute(macs))
 
-    result = _select_vars(variations, macs['macs'], min_allowable_mac, max_allowable_mac)
+    result = _select_vars(variations, macs, min_allowable_mac, max_allowable_mac)
 
     if calc_histogram:
-        counts, bin_edges = histogram(macs['macs'], n_bins=n_bins, limits=limits)
+        counts, bin_edges = histogram(macs, n_bins=n_bins, limits=limits)
         result[FLT_STATS][COUNT] = counts
         result[FLT_STATS][BIN_EDGES] = bin_edges
         limits = []
@@ -291,11 +291,11 @@ def filter_by_obs_heterocigosis(variations, max_allowable_het=None,
                            min_call_dp_for_het_call=min_call_dp_for_het_call,
                            max_call_dp_for_het_call=max_call_dp_for_het_call)
 
-    result = _select_vars(variations, obs_het['obs_het'],
+    result = _select_vars(variations, obs_het,
                           min_allowable=min_allowable_het,
                           max_allowable=max_allowable_het)
     if calc_histogram:
-        counts, bin_edges = histogram(obs_het['obs_het'], n_bins=n_bins, limits=limits)
+        counts, bin_edges = histogram(obs_het, n_bins=n_bins, limits=limits)
         result[FLT_STATS][COUNT] = counts
         result[FLT_STATS][BIN_EDGES] = bin_edges
         limits = []

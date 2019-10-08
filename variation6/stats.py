@@ -1,6 +1,5 @@
 import math
 import re
-import dask
 import dask.array as da
 import numpy as np
 
@@ -58,7 +57,7 @@ def calc_missing_gt(variations, rates=True):
     num_missing_gts = bool_gts.sum(axis=(1, 2)) / ploidy
     if rates:
         num_missing_gts = num_missing_gts / gts.shape[1]
-    return {'num_missing_gts': num_missing_gts}
+    return num_missing_gts
 
 
 def calc_maf_by_allele_count(variations,
@@ -81,7 +80,7 @@ def calc_maf_by_allele_count(variations,
 
     mafs = max_ / sum_
 
-    return {'mafs': _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)}
+    return _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)
 
 
 def _count_alleles_in_memory(gts, max_alleles, count_missing=True):
@@ -129,7 +128,7 @@ def calc_maf_by_gt(variations, max_alleles,
 
     mafs = max_ / sum_
     # return {'aa': allele_counts_by_snp}
-    return {'mafs': _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)}  # , 'allele_counts': allele_counts_by_snp}
+    return _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)
 
 
 def _calc_mac(gts, max_alleles):
@@ -166,7 +165,7 @@ def calc_mac(variations, max_alleles,
     macs = da.map_blocks(_private_calc_mac, gts, chunks=chunks,
                          drop_axis=(1, 2), dtype=np.float64)
 
-    return {'macs':  _mask_stats_with_few_samples(macs, variations, min_num_genotypes)}
+    return _mask_stats_with_few_samples(macs, variations, min_num_genotypes)
 
 
 def _call_is_hom_in_memory(gts):
@@ -222,8 +221,8 @@ def calc_obs_het(variations, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
     with np.errstate(invalid='ignore'):
         het = het / called_gts
 
-    return {'obs_het': _mask_stats_with_few_samples(het, variations, min_num_genotypes,
-                                                    num_called_gts=called_gts)}
+    return _mask_stats_with_few_samples(het, variations, min_num_genotypes,
+                                        num_called_gts=called_gts)
 
 
 def calc_called_gt(variations, rates=True):
@@ -273,21 +272,21 @@ def calc_expected_het(variations, max_alleles,
     ploidy = gts.shape[2]
     exp_het = 1 - da.sum(allele_freq ** ploidy, axis=1)
 
-    return {'expected_het': exp_het}
+    return exp_het
 
 
 def calc_unbias_expected_het(variations, max_alleles,
                              min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
 
     exp_het = calc_expected_het(variations, max_alleles=max_alleles,
-                                min_num_genotypes=min_num_genotypes)['expected_het']
+                                min_num_genotypes=min_num_genotypes)
 
     num_called_gts = calc_called_gt(variations, rates=False)
     num_samples = num_called_gts.astype(float)
     num_samples[num_samples < min_num_genotypes] = np.nan
 
     unbiased_exp_het = (2 * num_samples / (2 * num_samples - 1)) * exp_het
-    return  {'expected_het': unbiased_exp_het}
+    return  unbiased_exp_het
 
 
 def _get_mask_for_masking_samples_with_few_gts(variations, min_num_genotypes,
