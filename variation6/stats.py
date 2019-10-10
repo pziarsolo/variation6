@@ -332,13 +332,12 @@ def calc_diversities(variations, max_alleles, min_num_genotypes,
 
     diversities['num_variable_vars'] = num_variable_vars
 
-    percent_variable_vars = calc_percentaje(num_variable_vars, mafs_no_nan)
-    diversities['percent_variable_vars'] = percent_variable_vars
-
     snp_is_poly = mafs_no_nan <= polymorphic_threshold
     num_poly = da.sum(snp_is_poly)
-    diversities['percent_polymorphic_vars'] = calc_percentaje(num_poly,
-                                                              snp_is_poly)
+    # diversities['percent_polymorphic_vars'] = calc_percentaje(num_poly,
+    #                                                           snp_is_poly)
+    # diversities['percent_variable_vars'] = calc_percentaje(num_variable_vars,
+    #                                                        mafs_no_nan)
     diversities['num_polymorphic_vars'] = num_poly
 
     exp_het = calc_expected_het(variations, max_alleles=max_alleles,
@@ -347,5 +346,5 @@ def calc_diversities(variations, max_alleles, min_num_genotypes,
 
     obs_het = calc_obs_het(variations, min_num_genotypes=min_num_genotypes)
     diversities['obs_het'] = da.nanmean(obs_het)
-
+    diversities['num_total_variations'] = variations.num_variations
     return diversities
