@@ -390,7 +390,8 @@ def filter_variations(in_zarr_path, out_zarr_path, samples_to_keep=None,
     delayed_store = prepare_zarr_storage(task[FLT_VARS], out_zarr_path)
     pipeline_tasks[FLT_VARS] = delayed_store
 
-    result = compute(pipeline_tasks, store_variation_to_memory=False)
+    result = compute(pipeline_tasks, store_variation_to_memory=False,
+                     silence_runtime_warnings=True)
 
     if verbose:
         for filter_id, task_result in result[FLT_STATS].items():

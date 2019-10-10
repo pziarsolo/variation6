@@ -4,6 +4,7 @@ import allel
 import zarr
 import numcodecs
 import dask.array as da
+from dask.utils import SerializableLock
 
 from variation6 import (CHROM_FIELD, POS_FIELD, ID_FIELD, REF_FIELD, ALT_FIELD,
                         QUAL_FIELD, GT_FIELD, GQ_FIELD, DP_FIELD, AO_FIELD,
@@ -128,5 +129,5 @@ def prepare_zarr_storage(variations, out_path):
                 dataset.attrs[key] = value
 
         targets.append(dataset)
-
-    return da.store(sources, targets, compute=False)
+        lock = SerializableLock()
+    return da.store(sources, targets, compute=False, lock=lock)
