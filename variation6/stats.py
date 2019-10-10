@@ -8,6 +8,7 @@ from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES)
 
 DEF_NUM_BINS = 40
+MIN_DP_FOR_CALL_HET = 20
 
 
 def _calc_histogram(vector, n_bins, limits, weights=None):
@@ -320,6 +321,7 @@ def calc_percentaje(*args):
 
 
 def calc_diversities(variations, max_alleles, min_num_genotypes,
+                     min_call_dp_for_het_call=MIN_DP_FOR_CALL_HET,
                      polymorphic_threshold=0.95):
     diversities = {}
 
@@ -344,7 +346,9 @@ def calc_diversities(variations, max_alleles, min_num_genotypes,
                                 min_num_genotypes=min_num_genotypes)
     diversities['exp_het'] = da.nanmean(exp_het)
 
-    obs_het = calc_obs_het(variations, min_num_genotypes=min_num_genotypes)
+    obs_het = calc_obs_het(variations,
+                           min_call_dp_for_het_call=min_call_dp_for_het_call,
+                           min_num_genotypes=min_num_genotypes)
     diversities['obs_het'] = da.nanmean(obs_het)
     diversities['num_total_variations'] = variations.num_variations
     return diversities
