@@ -336,6 +336,7 @@ class DiversitiesTests(unittest.TestCase):
         max_alleles = variations[ALT_FIELD].shape[1] + 1
 
         task = calc_diversities(variations, max_alleles=max_alleles,
+                                min_call_dp_for_het_call=0,
                                 min_num_genotypes=0, polymorphic_threshold=0.5)
         result = compute(task, silence_runtime_warnings=True)
         self.assertAlmostEqual(result['num_variable_vars'], 6)
