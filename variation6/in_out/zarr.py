@@ -30,22 +30,24 @@ ZARR_VARIANTS_GROUP_NAME = 'variants'
 ZARR_CALL_GROUP_NAME = 'calldata'
 
 ALLELE_ZARR_DEFINITION_MAPPINGS = {
-    CHROM_FIELD: {'group':ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_CHROM_FIELD_NAME},
-    POS_FIELD: {'group':ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_POS_FIELD_NAME},
-    ID_FIELD: {'group':ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_ID_FIELD_NAME},
-    REF_FIELD: {'group':ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_REF_FIELD_NAME},
-    ALT_FIELD: {'group':ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_ALT_FIELD_NAME},
-    QUAL_FIELD: {'group':ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_QUAL_FIELD_NAME},
-    GT_FIELD: {'group':ZARR_CALL_GROUP_NAME, 'field': ZARR_GT_FIELD_NAME},
-    GQ_FIELD: {'group':ZARR_CALL_GROUP_NAME, 'field': ZARR_GQ_FIELD_NAME},
-    DP_FIELD: {'group':ZARR_CALL_GROUP_NAME, 'field': ZARR_DP_FIELD_NAME},
-    AO_FIELD: {'group':ZARR_CALL_GROUP_NAME, 'field': ZARR_AO_FIELD_NAME},
-    RO_FIELD: {'group':ZARR_CALL_GROUP_NAME, 'field': ZARR_RO_FIELD_NAME},
-    AD_FIELD: {'group':ZARR_CALL_GROUP_NAME, 'field': ZARR_AD_FIELD_NAME}
+    CHROM_FIELD: {'group': ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_CHROM_FIELD_NAME},
+    POS_FIELD: {'group': ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_POS_FIELD_NAME},
+    ID_FIELD: {'group': ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_ID_FIELD_NAME},
+    REF_FIELD: {'group': ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_REF_FIELD_NAME},
+    ALT_FIELD: {'group': ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_ALT_FIELD_NAME},
+    QUAL_FIELD: {'group': ZARR_VARIANTS_GROUP_NAME, 'field': ZARR_QUAL_FIELD_NAME},
+    GT_FIELD: {'group': ZARR_CALL_GROUP_NAME, 'field': ZARR_GT_FIELD_NAME},
+    GQ_FIELD: {'group': ZARR_CALL_GROUP_NAME, 'field': ZARR_GQ_FIELD_NAME},
+    DP_FIELD: {'group': ZARR_CALL_GROUP_NAME, 'field': ZARR_DP_FIELD_NAME},
+    AO_FIELD: {'group': ZARR_CALL_GROUP_NAME, 'field': ZARR_AO_FIELD_NAME},
+    RO_FIELD: {'group': ZARR_CALL_GROUP_NAME, 'field': ZARR_RO_FIELD_NAME},
+    AD_FIELD: {'group': ZARR_CALL_GROUP_NAME, 'field': ZARR_AD_FIELD_NAME}
 }
 
-VARIATION_ZARR_FIELD_MAPPING = {key: f'{value["group"]}/{value["field"]}' for key, value in ALLELE_ZARR_DEFINITION_MAPPINGS.items()}
-ZARR_VARIATION_FIELD_MAPPING = {value: key for key, value in VARIATION_ZARR_FIELD_MAPPING.items()}
+VARIATION_ZARR_FIELD_MAPPING = {
+    key: f'{value["group"]}/{value["field"]}' for key, value in ALLELE_ZARR_DEFINITION_MAPPINGS.items()}
+ZARR_VARIATION_FIELD_MAPPING = {value: key for key,
+                                value in VARIATION_ZARR_FIELD_MAPPING.items()}
 
 DEF_VCF_FIELDS = list(VARIATION_ZARR_FIELD_MAPPING.keys())
 
@@ -62,7 +64,7 @@ def vcf_to_zarr(vcf_path, zarr_path, fields=None):
     allel.vcf_to_zarr(str(vcf_path), str(zarr_path), fields=zarr_fields)
 
 
-def load_zarr(path, chunk_size=DEFAULT_VARIATION_NUM_IN_CHUNK):
+def load_zarr(path, num_vars_per_chunk=DEFAULT_VARIATION_NUM_IN_CHUNK):
     z_object = zarr.open_group(str(path), mode='r')
     variations = Variations(samples=da.from_zarr(z_object.samples))
     metadata = {}
@@ -76,8 +78,8 @@ def load_zarr(path, chunk_size=DEFAULT_VARIATION_NUM_IN_CHUNK):
             if array.attrs:
                 metadata[field] = dict(array.attrs.items())
 
-            chunks = (chunk_size,) + array.shape[1:]
-
+            chunks = (num_vars_per_chunk,) + array.shape[1:]
+            # chunks = None
             variations[field] = da.from_zarr(array, chunks=chunks)
     variations.metadata = metadata
 

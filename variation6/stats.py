@@ -124,8 +124,8 @@ def calc_maf_by_gt(variations, max_alleles,
     gts = variations[GT_FIELD]
 
     allele_counts_by_snp = count_alleles(gts, max_alleles, count_missing=False)
-    max_ = da.max(allele_counts_by_snp , axis=1)
-    sum_ = da.sum(allele_counts_by_snp , axis=1)
+    max_ = da.max(allele_counts_by_snp, axis=1)
+    sum_ = da.sum(allele_counts_by_snp, axis=1)
 
     mafs = max_ / sum_
     # return {'aa': allele_counts_by_snp}
@@ -180,7 +180,8 @@ def _call_is_hom(variations, is_missing=None):
     gts = variations[GT_FIELD]
 
     is_hom = da.map_blocks(_call_is_hom_in_memory, gts, drop_axis=2)
-    is_hom[is_missing] = False
+    if is_missing is not None:
+        is_hom[is_missing] = False
     return is_hom
 
 
@@ -189,7 +190,8 @@ def _call_is_het(variations, is_missing=None):
 #     if is_hom.shape[0] == 0:
 #         return is_hom, is_missing
     is_het = da.logical_not(is_hom)
-    is_het[is_missing] = False
+    if is_missing is not None:
+        is_het[is_missing] = False
     return is_het
 
 
@@ -206,8 +208,7 @@ def _calc_obs_het_counts(variations, axis, min_call_dp_for_het_call,
             high_dp = dps > max_call_dp_for_het_call
             is_missing = da.logical_or(is_missing, high_dp)
     is_het = _call_is_het(variations, is_missing=is_missing)
-#     if is_het.shape[0] == 0:
-#         return is_het, is_missing
+
     return (da.sum(is_het, axis=axis),
             da.sum(da.logical_not(is_missing), axis=axis))
 
@@ -218,9 +219,7 @@ def calc_obs_het(variations, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
     het, called_gts = _calc_obs_het_counts(variations, axis=1,
                                            min_call_dp_for_het_call=min_call_dp_for_het_call,
                                            max_call_dp_for_het_call=max_call_dp_for_het_call)
-    # To avoid problems with NaNs
-    with np.errstate(invalid='ignore'):
-        het = het / called_gts
+    het = het / called_gts
 
     return _mask_stats_with_few_samples(het, variations, min_num_genotypes,
                                         num_called_gts=called_gts)
@@ -251,7 +250,8 @@ def calc_allele_freq(variations, max_alleles,
     total_counts = da.sum(allele_counts, axis=1)
 
     allele_freq = allele_counts / total_counts[:, None]
-    allele_freq = _mask_stats_with_few_samples(allele_freq, variations, min_num_genotypes)
+    allele_freq = _mask_stats_with_few_samples(
+        allele_freq, variations, min_num_genotypes)
 
     return allele_freq
 
@@ -285,7 +285,7 @@ def calc_unbias_expected_het(variations, max_alleles,
     num_samples[num_samples < min_num_genotypes] = np.nan
 
     unbiased_exp_het = (2 * num_samples / (2 * num_samples - 1)) * exp_het
-    return  unbiased_exp_het
+    return unbiased_exp_het
 
 
 def _get_mask_for_masking_samples_with_few_gts(variations, min_num_genotypes,
