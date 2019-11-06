@@ -180,7 +180,7 @@ class Testhdf5Out(unittest.TestCase):
 
 class VcfTest(unittest.TestCase):
 
-    def test_save_to_zarr(self):
+    def test_save_to_vcf(self):
         zarr_path = TEST_DATA_DIR / 'test.zarr'
         expected_vcf = '''##fileformat=VCFv4.2
 ##FORMAT=<ID=AO,Number=A,Type=Integer,Description="Alternate allele observation count">
