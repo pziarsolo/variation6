@@ -40,7 +40,7 @@ class TestZarrOut(unittest.TestCase):
 
     def test_save_to_zarr(self):
         zarr_path = TEST_DATA_DIR / 'test.zarr'
-        variations = load_zarr(zarr_path, chunk_size=2)
+        variations = load_zarr(zarr_path, num_vars_per_chunk=2)
         # with this step we create a  variation with dask arrays of unknown shapes
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
         with TemporaryDirectory() as tmp_dir:

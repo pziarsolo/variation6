@@ -5,7 +5,11 @@ import numpy as np
 
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         RO_FIELD, DP_FIELD, EmptyVariationsError,
-                        MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES)
+                        MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES,
+    ALT_FIELD)
+from variation6.plot import plot_histogram
+from variation6.compute import compute
+from variation6.in_out.zarr import load_zarr
 
 DEF_NUM_BINS = 40
 MIN_DP_FOR_CALL_HET = 20
@@ -352,3 +356,51 @@ def calc_diversities(variations, max_alleles, min_num_genotypes,
     diversities['obs_het'] = da.nanmean(obs_het)
     diversities['num_total_variations'] = variations.num_variations
     return diversities
+
+
+def summarize_variations(in_zarr_path, out_dir_path, draw_missin_rate=True,
+                         draw_mac=True, draw_maf=True, draw_obs_het=True,
+                         min_call_dp_for_het_call=MIN_DP_FOR_CALL_HET,
+                         min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
+                         num_bins=DEF_NUM_BINS):
+    stats = {}
+    variations = load_zarr(in_zarr_path)
+    max_alleles = variations[ALT_FIELD].shape[1]
+    num_variations = variations.num_variations
+    num_samples = variations.num_samples
+
+    if draw_missin_rate:
+        _stats = calc_missing_gt(variations, rates=True)
+        counts, edges = histogram(_stats, n_bins=num_bins)
+        stats['missing'] = {'counts': counts, 'edges': edges}
+
+    if draw_mac:
+        _stats = calc_mac(variations, max_alleles, min_num_genotypes)
+        counts, edges = histogram(_stats, n_bins=num_bins)
+        stats['mac'] = {'counts': counts, 'edges': edges}
+
+    if draw_maf:
+        _stats = calc_maf_by_gt(variations, max_alleles, min_num_genotypes)
+        counts, edges = histogram(_stats, n_bins=num_bins)
+        stats['maf'] = {'counts': counts, 'edges': edges}
+
+    if draw_obs_het:
+        _stats = calc_obs_het(
+            variations, min_num_genotypes=min_num_genotypes,
+            min_call_dp_for_het_call=min_call_dp_for_het_call)
+        counts, edges = histogram(_stats, n_bins=num_bins)
+        stats['obs_heterocigosity'] = {'counts': counts, 'edges': edges}
+
+    computed_stats = compute(stats)
+
+    for kind, stats in computed_stats.items():
+        with (out_dir_path / f'{kind}.png').open('wb') as out_fhand:
+            plot_histogram(stats['counts'], stats['edges'], out_fhand,
+                           log_scale=True)
+
+    with (out_dir_path / 'stats.txt').open('w') as fhand:
+        fhand.write(f'STATS FOR: {in_zarr_path.name}\n')
+        fhand.write('-----------' + '-' * len(in_zarr_path.name) + '\n')
+        fhand.write(f'Num. variations: {num_variations}\n')
+        fhand.write(f'Num. samples: {num_samples}\n')
+        fhand.write('\n')

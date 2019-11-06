@@ -35,11 +35,11 @@ def _print_figure(canvas, fhand, no_interactive_win):
 
 
 def plot_histogram(counts, edges, fhand=None, axes=None, vlines=None,
-                   no_interactive_win=False, figsize=None,
+                   no_interactive_win=False, figsize=None, log_scale=False,
                    mpl_params=None, bin_labels=None, **kwargs):
     counts = {'': counts}
     plot_stacked_histograms(counts, edges, fhand=fhand, axes=axes,
-                            vlines=vlines,
+                            vlines=vlines, log_scale=log_scale,
                             no_interactive_win=no_interactive_win,
                             figsize=figsize, mpl_params=mpl_params,
                             bin_labels=bin_labels, **kwargs)
@@ -47,7 +47,8 @@ def plot_histogram(counts, edges, fhand=None, axes=None, vlines=None,
 
 def plot_stacked_histograms(counts, edges, fhand=None, axes=None, vlines=None,
                             no_interactive_win=False, figsize=None,
-                            mpl_params=None, bin_labels=None, **kwargs):
+                            log_scale=False, mpl_params=None,
+                            bin_labels=None, **kwargs):
     'counts should be a dictionary'
     if mpl_params is None:
         mpl_params = {}
@@ -57,6 +58,8 @@ def plot_stacked_histograms(counts, edges, fhand=None, axes=None, vlines=None,
         print_figure = True
     axes, canvas, fig = _get_mplot_axes(axes, fhand, figsize=figsize)
 
+    if log_scale:
+        axes.set_yscale('log')
     width = edges[1:] - edges[:-1]
     bottom = None
     for idx, (label, this_counts) in enumerate(counts.items()):

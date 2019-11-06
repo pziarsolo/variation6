@@ -84,7 +84,8 @@ class MinCallFilterTest(unittest.TestCase):
 class MinDepthGtToMissing(unittest.TestCase):
 
     def test_min_depth_gt_to_missing(self):
-        variations = load_zarr(TEST_DATA_DIR / 'test.zarr', chunk_size=2)
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr',
+                               num_vars_per_chunk=2)
         variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
         depth = 9
         prev_gts = variations[GT_FIELD].compute()
@@ -154,7 +155,8 @@ class MafFilterTest(unittest.TestCase):
         self.assertEqual(result[FLT_STATS], {'n_kept': 3, 'n_filtered_out': 4})
 
     def test_mac_filter(self):
-        variations = load_zarr(TEST_DATA_DIR / 'test.zarr', chunk_size=2)
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr',
+                               num_vars_per_chunk=2)
         task = filter_by_mac(variations, max_allowable_mac=1, max_alleles=3)
         result = compute(task, store_variation_to_memory=True,
                          silence_runtime_warnings=True)
