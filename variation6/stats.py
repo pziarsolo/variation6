@@ -362,7 +362,7 @@ def summarize_variations(in_zarr_path, out_dir_path, draw_missin_rate=True,
                          draw_mac=True, draw_maf=True, draw_obs_het=True,
                          min_call_dp_for_het_call=MIN_DP_FOR_CALL_HET,
                          min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
-                         num_bins=DEF_NUM_BINS):
+                         num_bins=DEF_NUM_BINS, silence_runtime_warnings=True):
     stats = {}
     variations = load_zarr(in_zarr_path)
     max_alleles = variations[ALT_FIELD].shape[1]
@@ -391,7 +391,8 @@ def summarize_variations(in_zarr_path, out_dir_path, draw_missin_rate=True,
         counts, edges = histogram(_stats, n_bins=num_bins)
         stats['obs_heterocigosity'] = {'counts': counts, 'edges': edges}
 
-    computed_stats = compute(stats)
+    computed_stats = compute(stats,
+                             silence_runtime_warnings=silence_runtime_warnings)
 
     for kind, stats in computed_stats.items():
         with (out_dir_path / f'{kind}.png').open('wb') as out_fhand:
