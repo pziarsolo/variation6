@@ -4,6 +4,11 @@ python:
   - "3.7"
   - "3.8"
 
+addons:
+  apt:
+    packages:
+      - libhdf5-dev 
+
 env:
   global:
   - PYTHONPATH="/home/travis/build/pziarsolo/vaition6"
