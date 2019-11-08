@@ -1,0 +1,21 @@
+language: python
+python:
+  - "3.6"      # current default Python on Travis CI
+  - "3.7"
+  - "3.8"
+
+env:
+  global:
+  - PYTHONPATH="/home/travis/build/pziarsolo/vaition6"
+  - PIP_USE_MIRRORS=true
+
+install:
+  - pip install -r requirements.txt
+  - pip install coveralls radon
+
+script:
+  - coverage run --source=. -m unittest discover -s variation6/tests
+
+after_success:
+  - coveralls
+
