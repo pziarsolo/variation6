@@ -6,7 +6,7 @@ import numpy as np
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         RO_FIELD, DP_FIELD, EmptyVariationsError,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES,
-    ALT_FIELD, AD_FIELD)
+                        ALT_FIELD, AD_FIELD)
 from variation6.plot import plot_histogram
 from variation6.compute import compute
 from variation6.in_out.zarr import load_zarr
