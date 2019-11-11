@@ -1,14 +1,11 @@
-'''
-Created on 2019(e)ko aza. 8(a)
-
-@author: peio
-'''
 import unittest
+import math
 
 import numpy as np
 import dask.array as da
 
-from variation6.distance import calc_kosman_dist, _kosman
+from variation6.distance import (calc_kosman_dist, _kosman,
+                                 calc_pop_pairwise_unbiased_nei_dists)
 from variation6.variations import Variations
 from variation6 import GT_FIELD, FLT_VARS
 from variation6.filters import keep_samples
@@ -120,6 +117,56 @@ class PairwiseFilterTest(unittest.TestCase):
         distances, samples = calc_kosman_dist(variations)
         expected = [0.33333333, 0.75, 0.75, 0.5, 0.5, 0.]
         assert np.allclose(distances, expected)
+
+
+class NeiUnbiasedDistTest(unittest.TestCase):
+
+    def test_nei_dist(self):
+
+        gts = np.array([[[1, 1], [5, 2], [2, 2], [3, 2]],
+                        [[1, 1], [1, 2], [2, 2], [2, 1]],
+                        [[-1, -1], [-1, -1], [-1, -1], [-1, -1]]])
+        variations = Variations()
+        variations.samples = da.from_array(np.array([1, 2, 3, 4]))
+        variations[GT_FIELD] = da.from_array(gts)
+
+        pops = [[1, 2], [3, 4]]
+        dists = calc_pop_pairwise_unbiased_nei_dists(variations,
+                                                     max_alleles=6,
+                                                     populations=pops,
+                                                     silence_runtime_warnings=True,
+                                                     min_num_genotypes=1)
+        assert math.isclose(dists[0], 0.3726315908494797)
+
+        # all missing
+        gts = np.array([[[-1, -1], [-1, -1], [-1, -1], [-1, -1]]])
+        variations = Variations()
+        variations.samples = da.from_array(np.array([1, 2, 3, 4]))
+        variations[GT_FIELD] = da.from_array(gts)
+
+        pops = [[1, 2], [3, 4]]
+        dists = calc_pop_pairwise_unbiased_nei_dists(variations,
+                                                     max_alleles=1,
+                                                     populations=pops,
+                                                     silence_runtime_warnings=True,
+                                                     min_num_genotypes=1)
+        assert math.isnan(dists[0])
+
+        # min_num_genotypes
+        gts = np.array([[[1, 1], [5, 2], [2, 2], [3, 2]],
+                        [[1, 1], [1, 2], [2, 2], [2, 1]],
+                        [[-1, -1], [-1, -1], [-1, -1], [-1, -1]]])
+
+        variations = Variations()
+        variations.samples = da.from_array(np.array([1, 2, 3, 4]))
+        variations[GT_FIELD] = da.from_array(gts)
+        pops = [[1, 2], [3, 4]]
+        dists = calc_pop_pairwise_unbiased_nei_dists(variations,
+                                                     max_alleles=6,
+                                                     populations=pops,
+                                                     silence_runtime_warnings=True,
+                                                     min_num_genotypes=1)
+        assert math.isclose(dists[0], 0.3726315908494797)
 
 
 if __name__ == '__main__':

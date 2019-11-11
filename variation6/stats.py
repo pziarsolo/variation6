@@ -233,6 +233,7 @@ def calc_called_gt(variations, rates=True):
 
     if rates:
         missing = calc_missing_gt(variations, rates=rates)
+
         return 1 - missing
     else:
         ploidy = variations.ploidy
@@ -242,21 +243,18 @@ def calc_called_gt(variations, rates=True):
 
 def calc_allele_freq(variations, max_alleles,
                      min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT):
-    gts = variations[GT_FIELD]
 
+    gts = variations[GT_FIELD]
     if gts.shape[0] == 0:
         return da.from_array(np.array([]))
-
     allele_counts = count_alleles(gts, max_alleles, count_missing=False)
+
     if allele_counts is None:
         raise ValueError('No alleles, everything is missing data')
-
     total_counts = da.sum(allele_counts, axis=1)
-
     allele_freq = allele_counts / total_counts[:, None]
     allele_freq = _mask_stats_with_few_samples(
         allele_freq, variations, min_num_genotypes)
-
     return allele_freq
 
 
@@ -296,6 +294,7 @@ def _get_mask_for_masking_samples_with_few_gts(variations, min_num_genotypes,
                                                num_called_gts=None):
     if num_called_gts is None:
         num_called_gts = calc_called_gt(variations, rates=False)
+
     mask = num_called_gts < min_num_genotypes
     return mask
 
