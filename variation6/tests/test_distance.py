@@ -5,9 +5,10 @@ import numpy as np
 import dask.array as da
 
 from variation6.distance import (calc_kosman_dist, _kosman,
-                                 calc_pop_pairwise_unbiased_nei_dists)
+                                 calc_pop_pairwise_unbiased_nei_dists,
+    calc_dset_pop_distance)
 from variation6.variations import Variations
-from variation6 import GT_FIELD, FLT_VARS
+from variation6 import GT_FIELD, FLT_VARS, DP_FIELD
 from variation6.filters import keep_samples
 from variation6.compute import compute
 
@@ -169,6 +170,72 @@ class NeiUnbiasedDistTest(unittest.TestCase):
         assert math.isclose(dists[0], 0.3726315908494797)
 
 
+class DsetDistTest(unittest.TestCase):
+
+    def test_dest_jost_distance(self):
+        gts = [[(1, 1), (1, 3), (1, 2), (1, 4), (3, 3), (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
+               [(1, 3), (1, 1), (1, 1), (1, 3), (3, 3), (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)]]
+        samples = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        pops = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11]]
+        dps = [[20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20],
+               [20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]]
+        variations = Variations()
+        variations.samples = da.from_array(np.array(samples))
+        variations[GT_FIELD] = da.from_array(np.array(gts))
+        variations[DP_FIELD] = da.from_array(np.array(dps))
+
+        dists = calc_dset_pop_distance(variations, max_alleles=5,
+                                       silence_runtime_warnings=True,
+                                       populations=pops, min_num_genotypes=0)
+        assert np.allclose(dists, [0.65490196])
+
+        dists = calc_dset_pop_distance(variations, max_alleles=5,
+                                       silence_runtime_warnings=True,
+                                       populations=pops, min_num_genotypes=6)
+        assert np.all(np.isnan(dists))
+
+    def test_empty_pop(self):
+        missing = (-1, -1)
+        gts = [[(1, 1), (1, 3), (1, 2), (1, 4), (3, 3), (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
+               [(1, 3), (1, 1), (1, 1), (1, 3), (3, 3), (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
+               [missing, missing, missing, missing, missing, (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
+               ]
+        dps = [[20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 0],
+               [20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 0],
+               [0, 0, 0, 0, 0, 20, 20, 20, 20, 20, 0]]
+        samples = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        pops = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11]]
+
+        variations = Variations()
+        variations.samples = da.from_array(np.array(samples))
+        variations[GT_FIELD] = da.from_array(np.array(gts))
+        variations[DP_FIELD] = da.from_array(np.array(dps))
+
+        dists = calc_dset_pop_distance(variations, max_alleles=5,
+                                       silence_runtime_warnings=True,
+                                       populations=pops, min_num_genotypes=0)
+        assert np.allclose(dists, [0.65490196])
+        gts = [[missing, missing, missing, missing, missing, (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
+               [missing, missing, missing, missing, missing, (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
+               [missing, missing, missing, missing, missing, (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
+               ]
+        dps = [[0, 0, 0, 0, 0, 20, 20, 20, 20, 20, 0],
+               [0, 0, 0, 0, 0, 20, 20, 20, 20, 20, 0],
+               [0, 0, 0, 0, 0, 20, 20, 20, 20, 20, 0]]
+        samples = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        pops = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11]]
+
+        variations = Variations()
+        variations.samples = da.from_array(np.array(samples))
+        variations[GT_FIELD] = da.from_array(np.array(gts))
+        variations[DP_FIELD] = da.from_array(np.array(dps))
+
+        dists = calc_dset_pop_distance(variations, max_alleles=5,
+                                       silence_runtime_warnings=True,
+                                       populations=pops, min_num_genotypes=0)
+        assert np.isnan(dists[0])
+
+
 if __name__ == '__main__':
-#     import sys; sys.argv = ['.', 'ObsHetFiltterTest.test_obs_het_filter']
+    # import sys; sys.argv = ['.', 'DsetDistTest.test_empty_pop']
     unittest.main()

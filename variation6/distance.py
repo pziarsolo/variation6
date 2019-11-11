@@ -7,7 +7,8 @@ import numpy as np
 
 from variation6 import GT_FIELD, FLT_VARS, MIN_NUM_GENOTYPES_FOR_POP_STAT
 from variation6.filters import keep_samples
-from variation6.stats import calc_missing_gt, calc_allele_freq
+from variation6.stats import (calc_missing_gt, calc_allele_freq,
+                              calc_allele_freq_by_depth, _calc_obs_het_counts)
 from variation6.compute import compute
 
 
@@ -189,3 +190,196 @@ def _calc_allele_freq_and_unbiased_J_per_locus(variations, max_alleles,
         xUb_per_locus = ((2 * n_indi * da.sum(allele_freq ** 2, axis=1)) - 1) / (2 * n_indi - 1)
 
     return allele_freq, xUb_per_locus
+
+
+def calc_pop_pairwise_nei_dists_by_depth(variations, populations,
+                                         silence_runtime_warnings=False):
+
+    variations_per_pop = [keep_samples(variations, pop_samples)[FLT_VARS]
+                          for pop_samples in populations]
+
+    jxy = {}
+    jxx = {}
+    jyy = {}
+    for pop_i, pop_j in combinations(range(len(populations)), 2):
+        pop_i_vars = variations_per_pop[pop_i]
+        pop_j_vars = variations_per_pop[pop_j]
+
+        freq_al_i = calc_allele_freq_by_depth(pop_i_vars)
+        freq_al_j = calc_allele_freq_by_depth(pop_j_vars)
+
+        chunk_jxy = da.nansum(freq_al_i * freq_al_j)
+        chunk_jxx = da.nansum(freq_al_i ** 2)
+        chunk_jyy = da.nansum(freq_al_j ** 2)
+
+        pop_idx = pop_i, pop_j
+        if pop_idx not in jxy:
+            jxy[pop_idx] = 0
+            jxx[pop_idx] = 0
+            jyy[pop_idx] = 0
+
+        # The real Jxy is usually divided by num_snps, but it does not
+        # not matter for the calculation
+        jxy[pop_idx] += chunk_jxy
+        jxx[pop_idx] += chunk_jxx
+        jyy[pop_idx] += chunk_jyy
+
+    computed_result = compute({'jxy': jxy, 'jxx':jxx, 'uJy':jyy},
+                              silence_runtime_warnings=silence_runtime_warnings)
+
+    computedjxy = computed_result['jxy']
+    computedjxx = computed_result['jxx']
+    computedjyy = computed_result['jyy']
+
+    n_pops = len(populations)
+    dists = np.zeros(int((n_pops ** 2 - n_pops) / 2))
+    index = 0
+    for pop_idx in combinations(range(len(populations)), 2):
+        pjxy = computedjxy[pop_idx]
+        pjxx = computedjxx[pop_idx]
+        pjyy = computedjyy[pop_idx]
+
+        try:
+            nei = math.log(pjxy / math.sqrt(pjxx * pjyy))
+            if nei != 0:
+                nei = -nei
+        except ValueError:
+            nei = float('inf')
+
+        dists[index] = nei
+        index += 1
+
+    return dists
+
+
+def calc_dset_pop_distance(variations, max_alleles, populations,
+                           min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
+                           min_call_dp_for_het=0, silence_runtime_warnings=False):
+    '''This is an implementation of the formulas proposed in GenAlex'''
+    pop_ids = list(range(len(populations)))
+    variations_per_pop = [keep_samples(variations, pop_samples)[FLT_VARS]
+                          for pop_samples in populations]
+
+    accumulated_dists = {}
+    accumulated_hs = {}
+    accumulated_ht = {}
+    num_vars = {}
+
+    for pop_id1, pop_id2 in combinations(pop_ids, 2):
+        vars_for_pop1 = variations_per_pop[pop_id1]
+        vars_for_pop2 = variations_per_pop[pop_id2]
+
+        res = _calc_pairwise_dest(vars_for_pop1, vars_for_pop2,
+                                  max_alleles=max_alleles,
+                                  min_call_dp_for_het=min_call_dp_for_het,
+                                  min_num_genotypes=min_num_genotypes)
+
+        res['corrected_hs']
+        res['corrected_ht']
+        num_vars_in_chunk = da.count_nonzero(~da.isnan(res['corrected_hs']))
+        hs_in_chunk = da.nansum(res['corrected_hs'])
+        ht_in_chunk = da.nansum(res['corrected_ht'])
+
+        key = (pop_id1, pop_id2)
+        if key in accumulated_dists:
+            accumulated_hs[key] += hs_in_chunk
+            accumulated_ht[key] += ht_in_chunk
+            num_vars[key] += num_vars_in_chunk
+        else:
+            accumulated_hs[key] = hs_in_chunk
+            accumulated_ht[key] = ht_in_chunk
+            num_vars[key] = num_vars_in_chunk
+
+    task = {'accumulated_hs': accumulated_hs,
+            'accumulated_ht':accumulated_ht,
+            'num_vars': num_vars}
+
+    result = compute(task, silence_runtime_warnings=silence_runtime_warnings)
+    computed_accumulated_hs = result['accumulated_hs']
+    computed_accumulated_ht = result['accumulated_ht']
+    computed_num_vars = result['num_vars']
+
+    tot_n_pops = len(populations)
+    dists = np.empty(int((tot_n_pops ** 2 - tot_n_pops) / 2))
+    dists[:] = np.nan
+    num_pops = 2
+    for idx, (pop_id1, pop_id2) in enumerate(combinations(pop_ids, 2)):
+        key = pop_id1, pop_id2
+        if key in accumulated_hs:
+            with np.errstate(invalid='ignore'):
+                corrected_hs = computed_accumulated_hs[key] / computed_num_vars[key]
+                corrected_ht = computed_accumulated_ht[key] / computed_num_vars[key]
+            dest = (num_pops / (num_pops - 1)) * ((corrected_ht - corrected_hs) / (1 - corrected_hs))
+        else:
+            dest = np.nan
+        dists[idx] = dest
+    return dists
+
+
+def _calc_pairwise_dest(vars_for_pop1, vars_for_pop2, max_alleles,
+                        min_call_dp_for_het, min_num_genotypes):
+    num_pops = 2
+    ploidy = vars_for_pop1.ploidy
+
+    allele_freq1 = calc_allele_freq(vars_for_pop1, max_alleles=max_alleles,
+                                    min_num_genotypes=0)
+    allele_freq2 = calc_allele_freq(vars_for_pop2, max_alleles=max_alleles,
+                                    min_num_genotypes=0)
+
+    exp_het1 = 1 - da.sum(allele_freq1 ** ploidy, axis=1)
+    exp_het2 = 1 - da.sum(allele_freq2 ** ploidy, axis=1)
+
+    hs_per_var = (exp_het1 + exp_het2) / 2
+
+    global_allele_freq = (allele_freq1 + allele_freq2) / 2
+    global_exp_het = 1 - da.sum(global_allele_freq ** ploidy, axis=1)
+    ht_per_var = global_exp_het
+
+    obs_het1_counts, called_gts1 = _calc_obs_het_counts(vars_for_pop1,
+                                                        axis=1,
+                                                        min_call_dp_for_het_call=min_call_dp_for_het)
+    obs_het1 = obs_het1_counts / called_gts1
+    obs_het2_counts, called_gts2 = _calc_obs_het_counts(vars_for_pop2,
+                                                        axis=1,
+                                                        min_call_dp_for_het_call=min_call_dp_for_het)
+    obs_het2 = obs_het2_counts / called_gts2
+
+    called_gts = da.from_array([called_gts1, called_gts2])
+
+    try:
+        called_gts_hmean = hmean(called_gts, axis=0)
+    except ValueError:
+        called_gts_hmean = None
+
+    if called_gts_hmean is None:
+        num_vars = vars_for_pop1.num_variations
+        corrected_hs = da.full((num_vars,), np.nan)
+        corrected_ht = da.full((num_vars,), np.nan)
+    else:
+        mean_obs_het_per_var = da.nanmean(da.stack([obs_het1, obs_het2]), axis=0)
+        corrected_hs = (called_gts_hmean / (called_gts_hmean - 1)) * (hs_per_var - (mean_obs_het_per_var / (2 * called_gts_hmean)))
+
+        corrected_ht = ht_per_var + (corrected_hs / (called_gts_hmean * num_pops)) - (mean_obs_het_per_var / (2 * called_gts_hmean * num_pops))
+
+        not_enough_gts = da.logical_or(called_gts1 < min_num_genotypes,
+                                          called_gts2 < min_num_genotypes)
+        corrected_hs[not_enough_gts] = np.nan
+        corrected_ht[not_enough_gts] = np.nan
+
+    return {'corrected_hs': corrected_hs, 'corrected_ht': corrected_ht}
+
+
+def hmean(array, axis=0, dtype=None):
+    if axis is None:
+        array = array.ravel()
+        size = array.shape[0]
+    else:
+        size = array.shape[axis]
+
+    inverse_mean = da.sum(1.0 / array, axis=axis, dtype=dtype)
+    is_inf = da.logical_not(da.isfinite(inverse_mean))
+    hmean = size / inverse_mean
+    hmean[is_inf] = np.nan
+
+    return hmean
+

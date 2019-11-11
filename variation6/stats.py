@@ -6,7 +6,7 @@ import numpy as np
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         RO_FIELD, DP_FIELD, EmptyVariationsError,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES,
-    ALT_FIELD)
+    ALT_FIELD, AD_FIELD)
 from variation6.plot import plot_histogram
 from variation6.compute import compute
 from variation6.in_out.zarr import load_zarr
@@ -239,6 +239,15 @@ def calc_called_gt(variations, rates=True):
         ploidy = variations.ploidy
         bool_gts = variations[GT_FIELD] != MISSING_GT
         return bool_gts.sum(axis=(1, 2)) / ploidy
+
+
+def calc_allele_freq_by_depth(variations):
+    allele_counts = variations[AD_FIELD]
+    allele_counts[allele_counts == -1] = 0
+    allele_counts = da.sum(allele_counts, axis=1)
+    total_counts = da.sum(allele_counts, axis=1)
+    allele_freq = allele_counts / total_counts[:, None]
+    return allele_freq
 
 
 def calc_allele_freq(variations, max_alleles,
