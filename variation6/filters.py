@@ -10,9 +10,9 @@ from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT, ALT_FIELD, FLT_STATS,
                         FLT_ID, COUNT, BIN_EDGES)
 from variation6.variations import Variations
-from variation6.stats.diversitiy import (calc_missing_gt, calc_maf_by_allele_count,
-                                         calc_mac, calc_maf_by_gt, count_alleles,
-                                         calc_obs_het, DEF_NUM_BINS, histogram)
+from variation6.stats.diversity import (calc_missing_gt, calc_maf_by_allele_count,
+                                        calc_mac, calc_maf_by_gt, count_alleles,
+                                        calc_obs_het, DEF_NUM_BINS, histogram)
 from variation6.in_out.zarr import load_zarr, prepare_zarr_storage
 from variation6.compute import compute
 from variation6.plot import plot_histogram

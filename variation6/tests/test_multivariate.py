@@ -3,10 +3,10 @@ import unittest
 import numpy as np
 import dask.array as da
 
+from variation6 import FLT_VARS, GT_FIELD
 from variation6.tests import TEST_DATA_DIR
 from variation6.in_out.zarr import load_zarr
 from variation6.stats.multivariate import gts_as_mat012, do_pca
-from variation6 import FLT_VARS, GT_FIELD
 from variation6.filters import remove_low_call_rate_vars
 from variation6.variations import Variations
 
@@ -33,8 +33,7 @@ class MultivariateTest(unittest.TestCase):
         gts = np.array([[[0, 0], [0, 0], [1, 1]],
                         [[0, 0], [0, 0], [1, 1]],
                         [[0, 0], [0, 0], [1, 1]],
-                        [[0, 0], [0, 0], [1, 1]],
-                        ])
+                        [[0, 0], [0, 0], [1, 1]]])
         variations = Variations()
         variations.samples = da.from_array(np.array(['a', 'b', 'c']))
         variations[GT_FIELD] = da.from_array(gts)

@@ -19,7 +19,7 @@ from variation6.filters import (remove_low_call_rate_vars,
 
 from variation6.compute import compute
 from variation6.variations import Variations
-from variation6.stats.diversitiy import DEF_NUM_BINS
+from variation6.stats.diversity import DEF_NUM_BINS
 
 
 class MinCallFilterTest(unittest.TestCase):
