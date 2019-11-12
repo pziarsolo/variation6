@@ -7,8 +7,9 @@ import numpy as np
 
 from variation6 import GT_FIELD, FLT_VARS, MIN_NUM_GENOTYPES_FOR_POP_STAT
 from variation6.filters import keep_samples
-from variation6.stats import (calc_missing_gt, calc_allele_freq,
-                              calc_allele_freq_by_depth, _calc_obs_het_counts)
+from variation6.stats.diversitiy import (calc_missing_gt, calc_allele_freq,
+                                         calc_allele_freq_by_depth,
+                                         _calc_obs_het_counts)
 from variation6.compute import compute
 
 

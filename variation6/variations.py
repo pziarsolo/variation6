@@ -1,8 +1,8 @@
 import math
 import numpy as np
 
-from variation6 import PUBLIC_CALL_GROUP, GT_FIELD, EmptyVariationsError, \
-    DEF_CHUNK_SIZE
+from variation6 import (PUBLIC_CALL_GROUP, GT_FIELD, EmptyVariationsError,
+                        DEF_CHUNK_SIZE)
 
 # ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
 

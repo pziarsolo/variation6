@@ -4,9 +4,9 @@ import math
 import numpy as np
 import dask.array as da
 
-from variation6.distance import (calc_kosman_dist, _kosman,
-                                 calc_pop_pairwise_unbiased_nei_dists,
-    calc_dset_pop_distance)
+from variation6.stats.distance import (calc_kosman_dist, _kosman,
+                                       calc_pop_pairwise_unbiased_nei_dists,
+                                       calc_dset_pop_distance)
 from variation6.variations import Variations
 from variation6 import GT_FIELD, FLT_VARS, DP_FIELD
 from variation6.filters import keep_samples

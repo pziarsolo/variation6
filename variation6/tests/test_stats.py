@@ -10,11 +10,12 @@ from variation6.in_out.zarr import load_zarr
 from variation6.tests import TEST_DATA_DIR
 from variation6.compute import compute
 from variation6.variations import Variations
-from variation6.stats import (calc_missing_gt, calc_maf_by_allele_count,
-                              calc_maf_by_gt, calc_mac, count_alleles,
-                              calc_obs_het, calc_expected_het,
-                              calc_allele_freq, calc_unbias_expected_het,
-    calc_diversities)
+from variation6.stats.diversitiy import (calc_missing_gt, calc_maf_by_gt,
+                                         calc_maf_by_allele_count,
+                                         calc_mac, count_alleles,
+                                         calc_obs_het, calc_expected_het,
+                                         calc_allele_freq, calc_diversities,
+                                         calc_unbias_expected_het)
 from variation6.filters import remove_low_call_rate_vars, keep_samples
 
 
