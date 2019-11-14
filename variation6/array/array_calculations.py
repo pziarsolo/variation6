@@ -15,15 +15,15 @@ def _same_interface_funcs(funcname, array, *args, **kwargs):
     return getattr(module, funcname)(array, *args, **kwargs)
 
 
-def sum(array, *args, **kwargs):
+def sum(array, *args, **kwargs):  # @ReservedAssignment
     return _same_interface_funcs('sum', array, *args, **kwargs)
 
 
-def min(array, *args, **kwargs):
+def min(array, *args, **kwargs):  # @ReservedAssignment
     return _same_interface_funcs('min', array, *args, **kwargs)
 
 
-def max(array, *args, **kwargs):
+def max(array, *args, **kwargs):  # @ReservedAssignment
     return _same_interface_funcs('max', array, *args, **kwargs)
 
 
@@ -106,11 +106,11 @@ def logical_or(cond1, cond2, *args, **kwargs):
     return function(cond1, cond2, *args, **kwargs)
 
 
-def any(array, *args, **kwargs):
+def any(array, *args, **kwargs):  # @ReservedAssignment
     return _same_interface_funcs('any', array, *args, **kwargs)
 
 
-def all(array, *args, **kwargs):
+def all(array, *args, **kwargs):  # @ReservedAssignment
     return _same_interface_funcs('all', array, *args, **kwargs)
 
 
