@@ -1,23 +1,7 @@
-import dask.array as da
 
 from numpy import dot
 from numpy.linalg import svd
-
-from variation6 import GT_FIELD, MISSING_INT
-from variation6.compute import compute
-
-
-def gts_as_mat012(variations):
-    '''It transforms the GT matrix into 0 (major allele homo), 1 (het),
-       2(other hom)'''
-    gts = variations[GT_FIELD]
-
-    gts012 = da.sum(gts, axis=2)
-    gts012[da.any(gts == MISSING_INT, axis=2)] = MISSING_INT
-    gts012[gts012 >= 1 ] = 2
-    gts012[da.logical_and(gts012 == 2, da.any(gts == 0, axis=2))] = 1
-
-    return gts012
+import variation6.array as va
 
 
 def _center_matrix(matrix):
@@ -30,9 +14,9 @@ def do_pca(variations):
     'It does a Principal Component Analysis'
     # transform the genotype data into a 2-dimensional matrix where each cell
     # has the number of non-reference alleles per call
-    gts012 = gts_as_mat012(variations)
-    task = gts012.T
-    matrix = compute(task)
+    gts012 = va.gts_as_mat012(variations)
+    matrix = gts012.T
+    va.make_sure_array_is_in_memory(matrix)
 
     n_rows, n_cols = matrix.shape
     if n_cols < n_rows:

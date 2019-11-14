@@ -48,6 +48,31 @@ class MinCallFilterTest(unittest.TestCase):
         self.assertTrue(np.all(processed[FLT_VARS].samples == variations.samples.compute()))
         self.assertEqual(processed[FLT_VARS].metadata, variations.metadata)
 
+    def test_filter_by_call_rate_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        pipeline_futures = {}
+
+        future_result = remove_low_call_rate_vars(variations,
+                                                  min_call_rate=0.5)
+        _add_task_to_pipeline(pipeline_futures, future_result)
+
+        future_result2 = remove_low_call_rate_vars(future_result[FLT_VARS],
+                                                   min_call_rate=0.5,
+                                                   filter_id='call_rate2')
+        _add_task_to_pipeline(pipeline_futures, future_result2)
+        processed = pipeline_futures
+        self.assertEqual(processed[FLT_STATS]['call_rate'][N_KEPT], 5)
+        self.assertEqual(processed[FLT_STATS]['call_rate'][N_FILTERED_OUT], 2)
+        self.assertEqual(processed[FLT_STATS]['call_rate2'][N_KEPT], 5)
+        self.assertEqual(processed[FLT_STATS]['call_rate2'][N_FILTERED_OUT], 0)
+
+        gts = processed[FLT_VARS][GT_FIELD]
+        self.assertEqual(gts.shape, (5, 3, 2))
+        self.assertTrue(np.all(processed[FLT_VARS].samples == variations.samples))
+        self.assertEqual(processed[FLT_VARS].metadata, variations.metadata)
+
     def test_filter_and_hist_by_call_rate(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
         pipeline_futures = {}
@@ -57,6 +82,23 @@ class MinCallFilterTest(unittest.TestCase):
                                                   calc_histogram=True)
         _add_task_to_pipeline(pipeline_futures, future_result)
         processed = compute(pipeline_futures, store_variation_to_memory=True)
+        self.assertEqual(len(processed[FLT_STATS]['call_rate'][COUNT]),
+                         DEF_NUM_BINS)
+        self.assertEqual(len(processed[FLT_STATS]['call_rate'][BIN_EDGES]),
+                         DEF_NUM_BINS + 1)
+        self.assertEqual(processed[FLT_STATS]['call_rate']['limits'], [0.5])
+
+    def test_filter_and_hist_by_call_rate_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        pipeline_futures = {}
+
+        future_result = remove_low_call_rate_vars(variations,
+                                                  min_call_rate=0.5,
+                                                  calc_histogram=True)
+        _add_task_to_pipeline(pipeline_futures, future_result)
+        processed = pipeline_futures
         self.assertEqual(len(processed[FLT_STATS]['call_rate'][COUNT]),
                          DEF_NUM_BINS)
         self.assertEqual(len(processed[FLT_STATS]['call_rate'][BIN_EDGES]),
@@ -86,12 +128,29 @@ class MinDepthGtToMissing(unittest.TestCase):
     def test_min_depth_gt_to_missing(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr',
                                num_vars_per_chunk=2)
-        variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
+        # variations = remove_low_call_rate_vars(variations, 0)[FLT_VARS]
         depth = 9
         prev_gts = variations[GT_FIELD].compute()
         depths = variations[DP_FIELD].compute()
         task = min_depth_gt_to_missing(variations, min_depth=depth)
         processed = compute(task, store_variation_to_memory=True)
+        post_gts = processed[FLT_VARS][GT_FIELD]
+
+        for dp, prev_gt, post_gt in zip(depths, prev_gts, post_gts):
+            for dp_, prev_gt_, post_gt_ in zip(dp, prev_gt, post_gt):
+                if dp_ != -1 and dp_ < depth:
+                    self.assertTrue(np.all(post_gt_ == [MISSING_INT, MISSING_INT]))
+                    self.assertFalse(np.all(prev_gt_ == [MISSING_INT, MISSING_INT]))
+
+    def test_min_depth_gt_to_missing_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr',
+                               num_vars_per_chunk=2)
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        depth = 9
+        prev_gts = np.copy(variations[GT_FIELD])
+        depths = variations[DP_FIELD]
+        processed = min_depth_gt_to_missing(variations, min_depth=depth)
         post_gts = processed[FLT_VARS][GT_FIELD]
 
         for dp, prev_gt, post_gt in zip(depths, prev_gts, post_gts):
@@ -119,12 +178,41 @@ class FilterSamplesTest(unittest.TestCase):
                     [-1, 6]]
         self.assertTrue(np.all(dps == expected))
 
+    def test_keep_samples_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+#         print(variations.samples.compute())
+#         print(variations[DP_FIELD].compute())
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        samples = ['upv196', 'pepo']
+        processed = keep_samples(variations, samples=samples)
+        dps = processed[FLT_VARS][DP_FIELD]
+
+        self.assertTrue(np.all(processed[FLT_VARS].samples == ['pepo',
+                                                               'upv196']))
+        expected = [[-1, 9], [-1, 8], [-1, 8], [14, 6], [-1, -1], [-1, -1],
+                    [-1, 6]]
+        self.assertTrue(np.all(dps == expected))
+
     def test_remove_samples(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
         samples = ['upv196', 'pepo']
 
         task = remove_samples(variations, samples=samples)
-        processed = compute(task, store_variation_to_memory=True)
+        processed = compute(task , store_variation_to_memory=True)
+        dps = processed[FLT_VARS][DP_FIELD]
+        self.assertTrue(np.all(['mu16'] == processed[FLT_VARS].samples))
+        expected = [[10], [9], [9], [-1], [-1], [ 9], [10]]
+        self.assertTrue(np.all(dps == expected))
+
+    def test_remove_samples_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+
+        samples = ['upv196', 'pepo']
+
+        processed = remove_samples(variations, samples=samples)
         dps = processed[FLT_VARS][DP_FIELD]
         self.assertTrue(np.all(['mu16'] == processed[FLT_VARS].samples))
         expected = [[10], [9], [9], [-1], [-1], [ 9], [10]]
@@ -135,10 +223,26 @@ class MafFilterTest(unittest.TestCase):
 
     def test_maf_by_allele_count_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+
         task = filter_by_maf_by_allele_count(variations, max_allowable_maf=0.6,
                                              min_num_genotypes=2)
         result = compute(task, store_variation_to_memory=True,
                          silence_runtime_warnings=True)
+        filtered_vars = result[FLT_VARS]
+        self.assertEqual(filtered_vars.num_variations, 4)
+        self.assertEqual(result[FLT_STATS], {'n_kept': 4,
+                                             'n_filtered_out': 3})
+
+    def test_maf_by_allele_count_filter_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+
+        result = filter_by_maf_by_allele_count(variations, max_allowable_maf=0.6,
+                                             min_num_genotypes=2)
+#         result = compute(task, store_variation_to_memory=True,
+#                          silence_runtime_warnings=True)
         filtered_vars = result[FLT_VARS]
         self.assertEqual(filtered_vars.num_variations, 4)
         self.assertEqual(result[FLT_STATS], {'n_kept': 4,
@@ -154,12 +258,37 @@ class MafFilterTest(unittest.TestCase):
         self.assertEqual(filtered_vars.num_variations, 3)
         self.assertEqual(result[FLT_STATS], {'n_kept': 3, 'n_filtered_out': 4})
 
+    def test_maf_filter_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        result = filter_by_maf(variations, max_allowable_maf=0.6, max_alleles=3,
+                             min_num_genotypes=2)
+#         result = compute(task, store_variation_to_memory=True,
+#                          silence_runtime_warnings=True)
+        filtered_vars = result[FLT_VARS]
+        self.assertEqual(filtered_vars.num_variations, 3)
+        self.assertEqual(result[FLT_STATS], {'n_kept': 3, 'n_filtered_out': 4})
+
     def test_mac_filter(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr',
                                num_vars_per_chunk=2)
         task = filter_by_mac(variations, max_allowable_mac=1, max_alleles=3)
         result = compute(task, store_variation_to_memory=True,
                          silence_runtime_warnings=True)
+        filtered_vars = result[FLT_VARS]
+        self.assertEqual(filtered_vars.num_variations, 0)
+        self.assertEqual(result[FLT_STATS], {'n_kept': 0,
+                                             'n_filtered_out': 7})
+
+    def test_mac_filter_in_memory(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr',
+                               num_vars_per_chunk=2)
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        result = filter_by_mac(variations, max_allowable_mac=1, max_alleles=3)
+#         result = compute(task, store_variation_to_memory=True,
+#                          silence_runtime_warnings=True)
         filtered_vars = result[FLT_VARS]
         self.assertEqual(filtered_vars.num_variations, 0)
         self.assertEqual(result[FLT_STATS], {'n_kept': 0,
@@ -243,6 +372,25 @@ class NoVariableOrMissingTest(unittest.TestCase):
         self.assertEqual(filtered_vars.num_variations, 2)
         self.assertEqual(result[FLT_STATS], {'n_kept': 2, 'n_filtered_out': 2})
 
+    def test_non_variable_filter_in_memory(self):
+        variations = Variations(samples=da.array(['aa', 'bb']))
+
+        gts = np.array([[[0, 0], [0, 0]],
+                        [[0, 2], [1, -1]],
+                        [[0, 0], [1, 1]],
+                        [[-1, -1], [-1, -1]]
+                       ])
+        variations[GT_FIELD] = da.from_array(gts)
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        result = keep_variable_variations(variations, max_alleles=3)
+
+#         result = compute(task, store_variation_to_memory=True)
+
+        filtered_vars = result[FLT_VARS]
+        self.assertEqual(filtered_vars.num_variations, 2)
+        self.assertEqual(result[FLT_STATS], {'n_kept': 2, 'n_filtered_out': 2})
+
 
 class FilterByPositionTest(unittest.TestCase):
 
@@ -263,6 +411,19 @@ class FilterByPositionTest(unittest.TestCase):
         variations, regions = self._create_fake_variations_and_regions()
         task = keep_variations_in_regions(variations, regions)
         result = compute(task, store_variation_to_memory=True)
+        chroms = result[FLT_VARS][CHROM_FIELD]
+        poss = result[FLT_VARS][POS_FIELD]
+        self.assertTrue(np.all(poss == [4, 5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0]))
+        self.assertTrue(np.all(chroms == ['chr1', 'chr1', 'chr2', 'chr2',
+                                          'chr2', 'chr2', 'chr2', 'chr2',
+                                          'chr2', 'chr2', 'chr2', 'chr2']))
+
+    def test_keep_variations_in_regions_in_memory(self):
+        variations, regions = self._create_fake_variations_and_regions()
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+        result = keep_variations_in_regions(variations, regions)
+#         result = compute(task, store_variation_to_memory=True)
         chroms = result[FLT_VARS][CHROM_FIELD]
         poss = result[FLT_VARS][POS_FIELD]
         self.assertTrue(np.all(poss == [4, 5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0]))
@@ -322,7 +483,49 @@ class ObsHetFiltterTest(unittest.TestCase):
         filtered = compute(task, store_variation_to_memory=True)
         assert np.all(filtered[FLT_VARS][GT_FIELD] == gts[[0, 2, 3]])
 
+    def test_filter_obs_het_in_mem(self):
+        variations = Variations()
+        gts = np.array([[[0, 0], [1, 1], [0, 1], [1, 1], [0, 0]],
+                        [[0, 0], [0, 0], [0, 0], [0, 0], [1, 1]],
+                        [[0, 0], [0, 0], [0, 0], [0, 0], [0, 1]],
+                        [[0, 0], [0, 0], [0, 1], [0, 0], [1, 1]]])
+        variations.samples = da.from_array([1, 2, 3, 4, 5])
+        variations[GT_FIELD] = da.from_array(gts)
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
+
+        filtered = filter_by_obs_heterocigosis(variations, min_num_genotypes=0)
+#         filtered = compute(task, store_variation_to_memory=True)
+        assert np.all(filtered[FLT_VARS][GT_FIELD] == gts)
+        assert filtered[FLT_STATS][N_KEPT] == 4
+        assert filtered[FLT_STATS][N_FILTERED_OUT] == 0
+
+        filtered = filter_by_obs_heterocigosis(variations, min_allowable_het=0.2,
+                                           min_num_genotypes=0)
+#         filtered = compute(task, store_variation_to_memory=True)
+        assert np.all(filtered[FLT_VARS][GT_FIELD] == gts[[0, 2, 3]])
+        assert filtered[FLT_STATS][N_KEPT] == 3
+        assert filtered[FLT_STATS][N_FILTERED_OUT] == 1
+
+        filtered = filter_by_obs_heterocigosis(variations, min_allowable_het=0.2,
+                                           min_num_genotypes=10)
+#         filtered = compute(task, store_variation_to_memory=True,
+#                            silence_runtime_warnings=True)
+        assert filtered[FLT_STATS][N_KEPT] == 0
+        assert filtered[FLT_STATS][N_FILTERED_OUT] == 4
+
+        filtered = filter_by_obs_heterocigosis(variations, max_allowable_het=0.1,
+                                           min_num_genotypes=0)
+#         filtered = compute(task, store_variation_to_memory=True)
+        assert np.all(filtered[FLT_VARS][GT_FIELD] == gts[[1]])
+
+        filtered = filter_by_obs_heterocigosis(variations, min_allowable_het=0.2,
+                                           max_allowable_het=0.3,
+                                           min_num_genotypes=0)
+#         filtered = compute(task, store_variation_to_memory=True)
+        assert np.all(filtered[FLT_VARS][GT_FIELD] == gts[[0, 2, 3]])
+
 
 if __name__ == '__main__':
-#     import sys; sys.argv = ['.', 'ObsHetFiltterTest.test_obs_het_filter']
+#     import sys; sys.argv = ['.', 'MinDepthGtToMissing']
     unittest.main()

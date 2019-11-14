@@ -1,8 +1,8 @@
 import math
 import re
-import dask.array as da
-import numpy as np
+import numpy
 
+import variation6.array as va
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         RO_FIELD, DP_FIELD, EmptyVariationsError,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES,
@@ -25,26 +25,26 @@ def _calc_histogram(vector, n_bins, limits, weights=None):
 
     if weights is None:
         if math.isnan(missing_value):
-            not_nan = ~da.isnan(vector)
+            not_nan = ~va.isnan(vector)
         else:
             not_nan = vector != missing_value
 
         vector = vector[not_nan]
 
     if limits is None:
-        limits = (da.min(vector), da.max(vector))
+        limits = (va.min(vector), va.max(vector))
 
     try:
-        result = da.histogram(vector, bins=n_bins, range=limits,
+        result = va.histogram(vector, bins=n_bins, range=limits,
                               weights=weights)
     except ValueError as error:
         if ('parameter must be finite' in str(error) or
                 re.search('autodetected range of .*finite', str(error))):
-            isfinite = ~da.isinf(vector)
+            isfinite = ~va.isinf(vector)
             vector = vector[isfinite]
             if weights is not None:
                 weights = weights[isfinite]
-            result = da.histogram(vector, bins=n_bins, range=limits,
+            result = va.histogram(vector, bins=n_bins, range=limits,
                                   weights=weights)
         else:
             raise
@@ -73,17 +73,19 @@ def calc_maf_by_allele_count(variations,
     ro[ro == MISSING_INT] = 0
     ao[ao == MISSING_INT] = 0
 
-    ro_sum = da.sum(ro, axis=1)
-    ao_sum = da.sum(ao, axis=1)
+    ro_sum = va.sum(ro, axis=1)
+    ao_sum = va.sum(ao, axis=1)
 
-    max_ = da.sum(ao, axis=1).max(axis=1)
+    max_ = va.sum(ao, axis=1).max(axis=1)
 
     sum_ = ao_sum.sum(axis=1) + ro_sum
 
     # we modify the max_ to update the values that are bigger in ro
-    max_[ro_sum > max_] = ro_sum
+    # here we have a setter that works different in numpy and dask
+    va.assign_with_mask(array=max_, using=ro_sum, mask=ro_sum > max_)
 
-    mafs = max_ / sum_
+    with numpy.errstate(invalid='ignore'):
+        mafs = max_ / sum_
 
     return _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)
 
@@ -95,10 +97,13 @@ def _count_alleles_in_memory(gts, max_alleles, count_missing=True):
     counts = []
     for allele in alleles:
         gts_in_mem = allele == gts
-        allele_count = np.count_nonzero(gts_in_mem, axis=(1, 2))
+        try:
+            allele_count = va.count_nonzero(gts_in_mem, axis=(1, 2))
+        except numpy.AxisError:
+            raise EmptyVariationsError()
         # print(allele_count)
         counts.append(allele_count.reshape(allele_count.shape[0], 1))
-    stacked = np.stack(counts, axis=2)
+    stacked = va.stack(counts, axis=2)
     return stacked.reshape(stacked.shape[0], stacked.shape[2])
 
 
@@ -107,17 +112,9 @@ def count_alleles(gts, max_alleles, count_missing=True):
     def _count_alleles(gts):
         return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
 
-    if isinstance(gts, np.ndarray):
-        try:
-            return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
-        except np.AxisError:
-            raise EmptyVariationsError()
-    try:
-        chunks = (gts.chunks[0], (1,) * len(gts.chunks[1]))
-    except IndexError:
-        raise EmptyVariationsError()
+    chunks = va.calculate_chunks(gts)
 
-    allele_counts_by_snp = da.map_blocks(_count_alleles, gts, chunks=chunks,
+    allele_counts_by_snp = va.map_blocks(_count_alleles, gts, chunks=chunks,
                                          drop_axis=(2,))
 
     return allele_counts_by_snp
@@ -128,10 +125,11 @@ def calc_maf_by_gt(variations, max_alleles,
     gts = variations[GT_FIELD]
 
     allele_counts_by_snp = count_alleles(gts, max_alleles, count_missing=False)
-    max_ = da.max(allele_counts_by_snp, axis=1)
-    sum_ = da.sum(allele_counts_by_snp, axis=1)
+    max_ = va.max(allele_counts_by_snp, axis=1)
+    sum_ = va.sum(allele_counts_by_snp, axis=1)
 
-    mafs = max_ / sum_
+    with numpy.errstate(invalid='ignore'):
+        mafs = max_ / sum_
     # return {'aa': allele_counts_by_snp}
     return _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)
 
@@ -139,13 +137,13 @@ def calc_maf_by_gt(variations, max_alleles,
 def _calc_mac(gts, max_alleles):
     gt_counts = count_alleles(gts, max_alleles=max_alleles)
     if gt_counts is None:
-        return np.array([])
+        return numpy.array([])
 
     missing_allele_idx = -1  # it's allways in the last position
-    num_missing = np.copy(gt_counts[:, missing_allele_idx])
+    num_missing = numpy.copy(gt_counts[:, missing_allele_idx])
     gt_counts[:, missing_allele_idx] = 0
 
-    max_ = np.amax(gt_counts, axis=1)
+    max_ = va.amax(gt_counts, axis=1)
 
     num_samples = gts.shape[1]
     ploidy = gts.shape[2]
@@ -153,7 +151,7 @@ def _calc_mac(gts, max_alleles):
     mac = num_samples - (num_chroms - num_missing - max_) / ploidy
 
     # we set the snps with no data to nan
-    mac[max_ == 0] = np.nan
+    mac[max_ == 0] = numpy.nan
     return mac
 
 
@@ -167,23 +165,24 @@ def calc_mac(variations, max_alleles,
     def _private_calc_mac(gts):
         return _calc_mac(gts, max_alleles=max_alleles)
 
-    macs = da.map_blocks(_private_calc_mac, gts, chunks=chunks,
-                         drop_axis=(1, 2), dtype=np.float64)
+    macs = va.map_blocks(_private_calc_mac, gts, chunks=chunks,
+                                 drop_axis=(1, 2), dtype=numpy.float64)
 
     return _mask_stats_with_few_samples(macs, variations, min_num_genotypes)
 
 
 def _call_is_hom_in_memory(gts):
-    is_hom = da.full(gts.shape[:-1], True, dtype=np.bool)
+    is_hom = va.create_full_array_in_memory(gts.shape[:-1], True,
+                                            dtype=numpy.bool)
     for idx in range(1, gts.shape[2]):
-        is_hom = da.logical_and(gts[:, :, idx] == gts[:, :, idx - 1], is_hom)
+        is_hom = va.logical_and(gts[:, :, idx] == gts[:, :, idx - 1], is_hom)
     return is_hom
 
 
 def _call_is_hom(variations, is_missing=None):
     gts = variations[GT_FIELD]
 
-    is_hom = da.map_blocks(_call_is_hom_in_memory, gts, drop_axis=2)
+    is_hom = va.map_blocks(_call_is_hom_in_memory, gts, drop_axis=2)
     if is_missing is not None:
         is_hom[is_missing] = False
     return is_hom
@@ -193,7 +192,7 @@ def _call_is_het(variations, is_missing=None):
     is_hom = _call_is_hom(variations, is_missing=is_missing)
 #     if is_hom.shape[0] == 0:
 #         return is_hom, is_missing
-    is_het = da.logical_not(is_hom)
+    is_het = va.logical_not(is_hom)
     if is_missing is not None:
         is_het[is_missing] = False
     return is_het
@@ -201,20 +200,20 @@ def _call_is_het(variations, is_missing=None):
 
 def _calc_obs_het_counts(variations, axis, min_call_dp_for_het_call,
                          max_call_dp_for_het_call=None):
-    is_missing = da.any(variations[GT_FIELD] == MISSING_INT, axis=2)
+    is_missing = va.any(variations[GT_FIELD] == MISSING_INT, axis=2)
 
     if min_call_dp_for_het_call is not None or max_call_dp_for_het_call is not None:
         dps = variations[DP_FIELD]
         if min_call_dp_for_het_call is not None:
             low_dp = dps < min_call_dp_for_het_call
-            is_missing = da.logical_or(is_missing, low_dp)
+            is_missing = va.logical_or(is_missing, low_dp)
         if max_call_dp_for_het_call is not None:
             high_dp = dps > max_call_dp_for_het_call
-            is_missing = da.logical_or(is_missing, high_dp)
+            is_missing = va.logical_or(is_missing, high_dp)
     is_het = _call_is_het(variations, is_missing=is_missing)
 
-    return (da.sum(is_het, axis=axis),
-            da.sum(da.logical_not(is_missing), axis=axis))
+    return (va.sum(is_het, axis=axis),
+            va.sum(va.logical_not(is_missing), axis=axis))
 
 
 def calc_obs_het(variations, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
@@ -223,7 +222,8 @@ def calc_obs_het(variations, min_num_genotypes=MIN_NUM_GENOTYPES_FOR_POP_STAT,
     het, called_gts = _calc_obs_het_counts(variations, axis=1,
                                            min_call_dp_for_het_call=min_call_dp_for_het_call,
                                            max_call_dp_for_het_call=max_call_dp_for_het_call)
-    het = het / called_gts
+    with numpy.errstate(invalid='ignore'):
+        het = het / called_gts
 
     return _mask_stats_with_few_samples(het, variations, min_num_genotypes,
                                         num_called_gts=called_gts)
@@ -244,8 +244,8 @@ def calc_called_gt(variations, rates=True):
 def calc_allele_freq_by_depth(variations):
     allele_counts = variations[AD_FIELD]
     allele_counts[allele_counts == -1] = 0
-    allele_counts = da.sum(allele_counts, axis=1)
-    total_counts = da.sum(allele_counts, axis=1)
+    allele_counts = va.sum(allele_counts, axis=1)
+    total_counts = va.sum(allele_counts, axis=1)
     allele_freq = allele_counts / total_counts[:, None]
     return allele_freq
 
@@ -255,13 +255,14 @@ def calc_allele_freq(variations, max_alleles,
 
     gts = variations[GT_FIELD]
     if gts.shape[0] == 0:
-        return da.from_array(np.array([]))
+        return va.empty_array(variations)
     allele_counts = count_alleles(gts, max_alleles, count_missing=False)
 
     if allele_counts is None:
         raise ValueError('No alleles, everything is missing data')
-    total_counts = da.sum(allele_counts, axis=1)
-    allele_freq = allele_counts / total_counts[:, None]
+    total_counts = va.sum(allele_counts, axis=1)
+    with numpy.errstate(invalid='ignore'):
+        allele_freq = allele_counts / total_counts[:, None]
     allele_freq = _mask_stats_with_few_samples(
         allele_freq, variations, min_num_genotypes)
     return allele_freq
@@ -273,14 +274,15 @@ def calc_expected_het(variations, max_alleles,
         allele_freq = calc_allele_freq(variations, max_alleles=max_alleles,
                                        min_num_genotypes=min_num_genotypes)
     except ValueError:
-        exp_het = da.empty((variations.num_variations,))
-        exp_het[:] = np.nan
+        exp_het = va.create_not_initialized_array_in_memory((variations.num_variations,))
+        exp_het[:] = numpy.nan
         return exp_het
     if allele_freq.shape[0] == 0:
-        return da.from_array(np.array([]))
+        return va.empty_array(variations)
+
     gts = variations[GT_FIELD]
     ploidy = gts.shape[2]
-    exp_het = 1 - da.sum(allele_freq ** ploidy, axis=1)
+    exp_het = 1 - va.sum(allele_freq ** ploidy, axis=1)
 
     return exp_het
 
@@ -293,7 +295,7 @@ def calc_unbias_expected_het(variations, max_alleles,
 
     num_called_gts = calc_called_gt(variations, rates=False)
     num_samples = num_called_gts.astype(float)
-    num_samples[num_samples < min_num_genotypes] = np.nan
+    num_samples[num_samples < min_num_genotypes] = numpy.nan
 
     unbiased_exp_het = (2 * num_samples / (2 * num_samples - 1)) * exp_het
     return unbiased_exp_het
@@ -309,27 +311,15 @@ def _get_mask_for_masking_samples_with_few_gts(variations, min_num_genotypes,
 
 
 def _mask_stats_with_few_samples(stats, variations, min_num_genotypes,
-                                 num_called_gts=None, masking_value=np.NaN):
+                                 num_called_gts=None, masking_value=numpy.NaN):
     if min_num_genotypes is not None:
         mask = _get_mask_for_masking_samples_with_few_gts(variations,
                                                           min_num_genotypes,
                                                           num_called_gts=num_called_gts)
 
-        if (not np.any(np.isnan(stats.shape)) and
-                len(stats.shape) != len(mask.shape)):
-            mask = mask.reshape((stats.shape))
+        va.assign_with_masking_value(stats, masking_value, mask)
 
-        stats[mask] = masking_value
     return stats
-
-
-def _calc_percentaje(total, matrix_with_condition):
-    return (total / matrix_with_condition.shape[0]) * 100
-
-
-def calc_percentaje(*args):
-    return da.map_blocks(_calc_percentaje, *args, chunks=None,
-                         dtype=np.float64)
 
 
 def calc_diversities(variations, max_alleles, min_num_genotypes,
@@ -340,28 +330,24 @@ def calc_diversities(variations, max_alleles, min_num_genotypes,
     mafs = calc_maf_by_gt(variations, max_alleles,
                           min_num_genotypes=min_num_genotypes)
 
-    mafs_no_nan = mafs[da.logical_not(da.isnan(mafs))]
+    mafs_no_nan = mafs[va.logical_not(va.isnan(mafs))]
 
-    num_variable_vars = da.sum(mafs_no_nan < 0.9999999999)
+    num_variable_vars = va.sum(mafs_no_nan < 0.9999999999)
 
     diversities['num_variable_vars'] = num_variable_vars
 
     snp_is_poly = mafs_no_nan <= polymorphic_threshold
-    num_poly = da.sum(snp_is_poly)
-    # diversities['percent_polymorphic_vars'] = calc_percentaje(num_poly,
-    #                                                           snp_is_poly)
-    # diversities['percent_variable_vars'] = calc_percentaje(num_variable_vars,
-    #                                                        mafs_no_nan)
+    num_poly = va.sum(snp_is_poly)
     diversities['num_polymorphic_vars'] = num_poly
 
     exp_het = calc_expected_het(variations, max_alleles=max_alleles,
                                 min_num_genotypes=min_num_genotypes)
-    diversities['exp_het'] = da.nanmean(exp_het)
+    diversities['exp_het'] = va.nanmean(exp_het)
 
     obs_het = calc_obs_het(variations,
                            min_call_dp_for_het_call=min_call_dp_for_het_call,
                            min_num_genotypes=min_num_genotypes)
-    diversities['obs_het'] = da.nanmean(obs_het)
+    diversities['obs_het'] = va.nanmean(obs_het)
     diversities['num_total_variations'] = variations.num_variations
     return diversities
 

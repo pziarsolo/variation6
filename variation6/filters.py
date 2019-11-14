@@ -1,7 +1,6 @@
 import sys
 from collections import OrderedDict
 
-import dask.array as da
 import numpy as np
 
 from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
@@ -10,6 +9,7 @@ from variation6 import (GT_FIELD, DP_FIELD, MISSING_INT, QUAL_FIELD,
                         MIN_NUM_GENOTYPES_FOR_POP_STAT, ALT_FIELD, FLT_STATS,
                         FLT_ID, COUNT, BIN_EDGES)
 from variation6.variations import Variations
+import variation6.array as va
 from variation6.stats.diversity import (calc_missing_gt, calc_maf_by_allele_count,
                                         calc_mac, calc_maf_by_gt, count_alleles,
                                         calc_obs_het, DEF_NUM_BINS, histogram)
@@ -30,8 +30,8 @@ def remove_low_call_rate_vars(variations, min_call_rate, rates=True,
     selected_vars = num_called >= min_call_rate
     variations = variations.get_vars(selected_vars)
 
-    num_selected_vars = da.count_nonzero(selected_vars)
-    num_filtered = da.count_nonzero(da.logical_not(selected_vars))
+    num_selected_vars = va.count_nonzero(selected_vars)
+    num_filtered = va.count_nonzero(va.logical_not(selected_vars))
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
@@ -58,9 +58,10 @@ def _gt_to_missing(variations, field, min_value):
 
     # as we can not slice using arrays of diferente dimensions, we need to
     # create one with same dimensions with stack
-    p2 = da.map_blocks(_stack_in_memory, calls_setted_to_missing, dtype='i4',
+    p2 = va.map_blocks(_stack_in_memory, calls_setted_to_missing, dtype='i4',
                        new_axis=2)
-    gts[p2] = MISSING_INT
+
+    va.assign_with_masking_value(gts, MISSING_INT, p2)
 
     variations[GT_FIELD] = gts
 
@@ -84,8 +85,8 @@ def remove_samples(variations, samples):
 
 
 def _filter_samples(variations, samples, reverse=False):
-
-    samples_in_variation = variations.samples.compute()
+    va.make_sure_array_is_in_memory(variations.samples)
+    samples_in_variation = np.copy(variations.samples)
     sample_cols = np.array(sorted(list(samples_in_variation).index(sample) for sample in samples))
     samples = [samples_in_variation[index] for index in sample_cols]
 
@@ -93,7 +94,7 @@ def _filter_samples(variations, samples, reverse=False):
         sample_cols = [index for index in range(len(samples_in_variation)) if index not in sample_cols]
         samples = [sample for index, sample in enumerate(samples_in_variation) if index in sample_cols]
 
-    new_variations = Variations(samples=da.from_array(samples),
+    new_variations = Variations(samples=np.array(samples),
                                 metadata=variations.metadata)
     for field, array in variations._arrays.items():
         if PUBLIC_CALL_GROUP in field:
@@ -103,8 +104,9 @@ def _filter_samples(variations, samples, reverse=False):
 
 
 def _select_vars(variations, stats, min_allowable=None, max_allowable=None):
-    selector_max = None if max_allowable is None else stats <= max_allowable
-    selector_min = None if min_allowable is None else stats >= min_allowable
+    with np.errstate(invalid='ignore'):
+        selector_max = None if max_allowable is None else stats <= max_allowable
+        selector_min = None if min_allowable is None else stats >= min_allowable
 
     if selector_max is None and selector_min is not None:
         selected_vars = selector_min
@@ -117,8 +119,8 @@ def _select_vars(variations, stats, min_allowable=None, max_allowable=None):
 
     variations = variations.get_vars(selected_vars)
 
-    num_selected_vars = da.count_nonzero(selected_vars)
-    num_filtered = da.count_nonzero(da.logical_not(selected_vars))
+    num_selected_vars = va.count_nonzero(selected_vars)
+    num_filtered = va.count_nonzero(va.logical_not(selected_vars))
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
@@ -127,7 +129,8 @@ def _select_vars(variations, stats, min_allowable=None, max_allowable=None):
 
 def _filter_no_row(variations):
     n_snps = variations.num_variations
-    selector = da.ones((n_snps,), dtype=np.bool_)
+    selector = va.ones((n_snps,), dtype=np.bool_,
+                       as_type_of=variations[GT_FIELD])
     return selector
 
 
@@ -210,19 +213,19 @@ def filter_by_mac(variations, max_alleles, max_allowable_mac=None,
 def keep_variable_variations(variations, max_alleles,
                              filter_id='variable_variations'):
     gts = variations[GT_FIELD]
-    some_not_missing_gts = da.any(gts != MISSING_INT, axis=2)
-    selected_vars1 = da.any(some_not_missing_gts, axis=1)
+    some_not_missing_gts = va.any(gts != MISSING_INT, axis=2)
+    selected_vars1 = va.any(some_not_missing_gts, axis=1)
     allele_counts = count_alleles(gts, max_alleles=max_alleles,
                                   count_missing=False)
-    num_alleles_per_snp = da.sum(allele_counts > 0, axis=1)
+    num_alleles_per_snp = va.sum(allele_counts > 0, axis=1)
     selected_vars2 = num_alleles_per_snp > 1
 
-    selected_vars = da.logical_and(selected_vars1, selected_vars2)
+    selected_vars = va.logical_and(selected_vars1, selected_vars2)
 
     selected_variations = variations.get_vars(selected_vars)
 
-    num_selected_vars = da.count_nonzero(selected_vars)
-    num_filtered = da.count_nonzero(da.logical_not(selected_vars))
+    num_selected_vars = va.count_nonzero(selected_vars)
+    num_filtered = va.count_nonzero(va.logical_not(selected_vars))
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 
@@ -251,12 +254,12 @@ def _select_variations_in_region(variations, regions):
             raise ValueError('Malformed region: ' + str(region))
         in_this_region = chroms[:] == desired_chrom
         if len(region) > 1:
-            in_this_region = da.logical_and(in_this_region,
-                                            da.logical_and(region[1] <= poss, poss < region[2]))
+            in_this_region = va.logical_and(in_this_region,
+                                            va.logical_and(region[1] <= poss, poss < region[2]))
         if in_any_region is None:
             in_any_region = in_this_region
         else:
-            in_any_region = da.logical_or(in_any_region, in_this_region)
+            in_any_region = va.logical_or(in_any_region, in_this_region)
 
     return in_any_region
 
@@ -264,12 +267,12 @@ def _select_variations_in_region(variations, regions):
 def _filter_by_snp_position(variations, regions, filter_id, reverse=False):
     selected_vars = _select_variations_in_region(variations, regions)
     if reverse:
-        selected_vars = da.logical_not(selected_vars)
+        selected_vars = va.logical_not(selected_vars)
 
     selected_variations = variations.get_vars(selected_vars)
 #     print('sel', selected_variations.shape)
-    num_selected_vars = da.count_nonzero(selected_vars)
-    num_filtered = da.count_nonzero(da.logical_not(selected_vars))
+    num_selected_vars = va.count_nonzero(selected_vars)
+    num_filtered = va.count_nonzero(va.logical_not(selected_vars))
 
     flt_stats = {N_KEPT: num_selected_vars, N_FILTERED_OUT: num_filtered}
 

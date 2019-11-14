@@ -3,6 +3,8 @@ import numpy as np
 
 from variation6.variations import Variations
 from variation6 import GT_FIELD, CHROM_FIELD
+from variation6.tests import TEST_DATA_DIR
+from variation6.in_out.zarr import load_zarr
 
 
 class VariationsTest(unittest.TestCase):
@@ -46,6 +48,7 @@ class VariationsTest(unittest.TestCase):
         self.assertEqual(variations.num_variations, 3)
 
     def test_iterate_chunks(self):
+        # in memory
         variations = Variations()
         variations.samples = ['1', '2', '3']
         gts = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3]])
@@ -53,6 +56,11 @@ class VariationsTest(unittest.TestCase):
         for index, chunk in enumerate(variations.iterate_chunks(chunk_size=1)):
             assert np.all(chunk[GT_FIELD] == variations[GT_FIELD][index, :])
             assert np.all(chunk.samples == variations.samples)
+
+        # in disk
+        variations = load_zarr((TEST_DATA_DIR / 'test.zarr'), num_vars_per_chunk=1)
+        chunks = list(variations.iterate_chunks())
+        self.assertEqual(len(chunks), 7)
 
 
 if __name__ == "__main__":

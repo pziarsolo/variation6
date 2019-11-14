@@ -1,10 +1,11 @@
 import math
-import numpy as np
+import warnings
+from collections import OrderedDict
 
+import numpy as np
+import dask.array as da
 from variation6 import (PUBLIC_CALL_GROUP, GT_FIELD, EmptyVariationsError,
                         DEF_CHUNK_SIZE)
-
-# ALLOWED_FIELDS = VARIATION_FIELDS + CALL_FIELDS
 
 
 class Variations:
@@ -74,8 +75,6 @@ class Variations:
     def __setitem__(self, key, value):
         if key == 'samples':
             self.samples = value
-#         if value.shape == (0,):
-#             print('data is empty')
 
         # we can not check by shape 0 if array is not computed.
         if (self.num_variations != 0 and not math.isnan(self.num_variations)
@@ -113,9 +112,33 @@ class Variations:
     def items(self):
         return self._arrays.items()
 
-    def iterate_chunks(self, chunk_size=DEF_CHUNK_SIZE):
-        chunk_indices = list(range(0, self.num_variations, chunk_size))
-        for chunk_start in chunk_indices:
-            index = slice(chunk_start, chunk_start + chunk_size)
-            yield self.get_vars(index)
+    def iterate_chunks(self, chunk_size=None):
+        gts = self._arrays[GT_FIELD]
+        if isinstance(gts, da.Array) and np.any(np.isnan(gts.shape)):
+            if chunk_size:
+                msg = 'If variations is full of dask arrays with unknown '
+                msg += 'shape, can not define chunk size. This is defined by '
+                msg += 'chunks of each array'
+                warnings.warn(msg)
+            return self._iterate_chunks_of_unknown_shape_arrays()
+        else:
+            if chunk_size is None:
+                chunk_size = DEF_CHUNK_SIZE
+                chunk_size = gts.chunks[0][0]
+            return self._iterate_chunks_of_known_shape_arrays(chunk_size)
 
+    def _iterate_chunks_of_known_shape_arrays(self, chunk_size):
+            chunk_indices = list(range(0, self.num_variations, chunk_size))
+            for chunk_start in chunk_indices:
+                index = slice(chunk_start, chunk_start + chunk_size)
+                yield self.get_vars(index)
+
+    def _iterate_chunks_of_unknown_shape_arrays(self):
+        named_blocks = OrderedDict({key: array.blocks for key, array in self._arrays.items()})
+        fields = named_blocks.keys()
+        array_blocks = zip(*named_blocks.values())
+        for array_block in array_blocks:
+            variations = Variations(samples=self.samples, metadata=self.metadata)
+            for field, block in zip(fields, array_block):
+                variations[field] = block
+            yield variations

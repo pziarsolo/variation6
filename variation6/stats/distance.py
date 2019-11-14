@@ -2,8 +2,8 @@ import math
 from itertools import combinations
 from collections import OrderedDict
 
-import dask.array as da
 import numpy as np
+import variation6.array as va
 
 from variation6 import GT_FIELD, FLT_VARS, MIN_NUM_GENOTYPES_FOR_POP_STAT
 from variation6.filters import keep_samples
@@ -13,9 +13,11 @@ from variation6.stats.diversity import (calc_missing_gt, calc_allele_freq,
 from variation6.compute import compute
 
 
-def calc_kosman_dist(variations, min_num_snps=None):
+def calc_kosman_dist(variations, min_num_snps=None,
+                     silence_runtime_warning=False):
     variations_by_sample = OrderedDict()
-    samples = variations.samples.compute()
+
+    samples = va.make_sure_array_is_in_memory(variations.samples)
     for sample in samples:
         variations_by_sample[sample] = keep_samples(variations, [sample])[FLT_VARS]
 
@@ -29,7 +31,8 @@ def calc_kosman_dist(variations, min_num_snps=None):
         snp_by_snp_comparation_array = _kosman(vars1, vars2)
         distances_by_pair[(sample1, sample2)] = snp_by_snp_comparation_array
 
-    computed_distances_by_pair = compute(distances_by_pair)
+    computed_distances_by_pair = compute(distances_by_pair,
+                                         silence_runtime_warnings=silence_runtime_warning)
 
     distances = []
     for sample_index, sample in enumerate(samples):
@@ -53,7 +56,7 @@ def _get_gts_non_missing_in_both(vars1, vars2):
     num_missing_gts1 = calc_missing_gt(vars1, rates=True)
     num_missing_gts2 = calc_missing_gt(vars2, rates=True)
 
-    is_called = da.logical_not(da.logical_or(num_missing_gts1, num_missing_gts2))
+    is_called = va.logical_not(va.logical_or(num_missing_gts1, num_missing_gts2))
 
     gts1 = vars1[GT_FIELD]
     gts2 = vars2[GT_FIELD]
@@ -75,11 +78,16 @@ def _kosman(vars1, vars2):
     alleles_comparison1 = indi1 == indi2.transpose()[:, :, None]
     alleles_comparison2 = indi2 == indi1.transpose()[:, :, None]
 
-    result = da.add(da.any(alleles_comparison2, axis=2).sum(axis=0),
-                    da.any(alleles_comparison1, axis=2).sum(axis=0))
+    result = va.add(va.any(alleles_comparison2, axis=2).sum(axis=0),
+                    va.any(alleles_comparison1, axis=2).sum(axis=0),
+                    dtype=np.float64)
+
     result[result == 0] = 1
     result[result == 4] = 0
-    result[da.logical_and(result != 1, result != 0)] = 0.5
+
+    mask = va.logical_and(result != 1, result != 0)
+    result[mask] = 0.5
+
     return result
 
 
@@ -148,13 +156,13 @@ def _accumulate_j_stats(variations1, variations2, max_alleles,
 
     # sum over all loci
     if Jxy[pop_name1][pop_name2] is None:
-        Jxy[pop_name1][pop_name2] = da.nansum(Jxy_per_locus)
-        uJx[pop_name1][pop_name2] = da.nansum(xUb_per_locus)
-        uJy[pop_name1][pop_name2] = da.nansum(yUb_per_locus)
+        Jxy[pop_name1][pop_name2] = va.nansum(Jxy_per_locus)
+        uJx[pop_name1][pop_name2] = va.nansum(xUb_per_locus)
+        uJy[pop_name1][pop_name2] = va.nansum(yUb_per_locus)
     else:
-        Jxy[pop_name1][pop_name2] += da.nansum(Jxy_per_locus)
-        uJx[pop_name1][pop_name2] += da.nansum(xUb_per_locus)
-        uJy[pop_name1][pop_name2] += da.nansum(yUb_per_locus)
+        Jxy[pop_name1][pop_name2] += va.nansum(Jxy_per_locus)
+        uJx[pop_name1][pop_name2] += va.nansum(xUb_per_locus)
+        uJy[pop_name1][pop_name2] += va.nansum(yUb_per_locus)
 
 
 def _calc_j_stats_per_locus(variations1, variations2, max_alleles,
@@ -172,7 +180,7 @@ def _calc_j_stats_per_locus(variations1, variations2, max_alleles,
     if allele_freq2 is None or allele_freq1 is None:
         return None, None, None
 
-    Jxy_per_locus = da.sum(allele_freq1 * allele_freq2, axis=1)
+    Jxy_per_locus = va.sum(allele_freq1 * allele_freq2, axis=1)
 
     return xUb_per_locus, yUb_per_locus, Jxy_per_locus
 
@@ -188,7 +196,7 @@ def _calc_allele_freq_and_unbiased_J_per_locus(variations, max_alleles,
 
     if allele_freq is not None:
         n_indi = variations[GT_FIELD].shape[1]
-        xUb_per_locus = ((2 * n_indi * da.sum(allele_freq ** 2, axis=1)) - 1) / (2 * n_indi - 1)
+        xUb_per_locus = ((2 * n_indi * va.sum(allele_freq ** 2, axis=1)) - 1) / (2 * n_indi - 1)
 
     return allele_freq, xUb_per_locus
 
@@ -209,9 +217,9 @@ def calc_pop_pairwise_nei_dists_by_depth(variations, populations,
         freq_al_i = calc_allele_freq_by_depth(pop_i_vars)
         freq_al_j = calc_allele_freq_by_depth(pop_j_vars)
 
-        chunk_jxy = da.nansum(freq_al_i * freq_al_j)
-        chunk_jxx = da.nansum(freq_al_i ** 2)
-        chunk_jyy = da.nansum(freq_al_j ** 2)
+        chunk_jxy = va.nansum(freq_al_i * freq_al_j)
+        chunk_jxx = va.nansum(freq_al_i ** 2)
+        chunk_jyy = va.nansum(freq_al_j ** 2)
 
         pop_idx = pop_i, pop_j
         if pop_idx not in jxy:
@@ -277,9 +285,9 @@ def calc_dset_pop_distance(variations, max_alleles, populations,
 
         res['corrected_hs']
         res['corrected_ht']
-        num_vars_in_chunk = da.count_nonzero(~da.isnan(res['corrected_hs']))
-        hs_in_chunk = da.nansum(res['corrected_hs'])
-        ht_in_chunk = da.nansum(res['corrected_ht'])
+        num_vars_in_chunk = va.count_nonzero(~va.isnan(res['corrected_hs']))
+        hs_in_chunk = va.nansum(res['corrected_hs'])
+        ht_in_chunk = va.nansum(res['corrected_ht'])
 
         key = (pop_id1, pop_id2)
         if key in accumulated_dists:
@@ -327,13 +335,13 @@ def _calc_pairwise_dest(vars_for_pop1, vars_for_pop2, max_alleles,
     allele_freq2 = calc_allele_freq(vars_for_pop2, max_alleles=max_alleles,
                                     min_num_genotypes=0)
 
-    exp_het1 = 1 - da.sum(allele_freq1 ** ploidy, axis=1)
-    exp_het2 = 1 - da.sum(allele_freq2 ** ploidy, axis=1)
+    exp_het1 = 1 - va.sum(allele_freq1 ** ploidy, axis=1)
+    exp_het2 = 1 - va.sum(allele_freq2 ** ploidy, axis=1)
 
     hs_per_var = (exp_het1 + exp_het2) / 2
 
     global_allele_freq = (allele_freq1 + allele_freq2) / 2
-    global_exp_het = 1 - da.sum(global_allele_freq ** ploidy, axis=1)
+    global_exp_het = 1 - va.sum(global_allele_freq ** ploidy, axis=1)
     ht_per_var = global_exp_het
 
     obs_het1_counts, called_gts1 = _calc_obs_het_counts(vars_for_pop1,
@@ -345,7 +353,7 @@ def _calc_pairwise_dest(vars_for_pop1, vars_for_pop2, max_alleles,
                                                         min_call_dp_for_het_call=min_call_dp_for_het)
     obs_het2 = obs_het2_counts / called_gts2
 
-    called_gts = da.from_array([called_gts1, called_gts2])
+    called_gts = va.stack([called_gts1, called_gts2], as_type_of=called_gts1)
 
     try:
         called_gts_hmean = hmean(called_gts, axis=0)
@@ -354,15 +362,15 @@ def _calc_pairwise_dest(vars_for_pop1, vars_for_pop2, max_alleles,
 
     if called_gts_hmean is None:
         num_vars = vars_for_pop1.num_variations
-        corrected_hs = da.full((num_vars,), np.nan)
-        corrected_ht = da.full((num_vars,), np.nan)
+        corrected_hs = va.full((num_vars,), np.nan, as_type_of=vars_for_pop1[GT_FIELD])
+        corrected_ht = va.full((num_vars,), np.nan, as_type_of=vars_for_pop1[GT_FIELD])
     else:
-        mean_obs_het_per_var = da.nanmean(da.stack([obs_het1, obs_het2]), axis=0)
+        mean_obs_het_per_var = va.nanmean(va.stack([obs_het1, obs_het2]), axis=0)
         corrected_hs = (called_gts_hmean / (called_gts_hmean - 1)) * (hs_per_var - (mean_obs_het_per_var / (2 * called_gts_hmean)))
 
         corrected_ht = ht_per_var + (corrected_hs / (called_gts_hmean * num_pops)) - (mean_obs_het_per_var / (2 * called_gts_hmean * num_pops))
 
-        not_enough_gts = da.logical_or(called_gts1 < min_num_genotypes,
+        not_enough_gts = va.logical_or(called_gts1 < min_num_genotypes,
                                           called_gts2 < min_num_genotypes)
         corrected_hs[not_enough_gts] = np.nan
         corrected_ht[not_enough_gts] = np.nan
@@ -376,9 +384,9 @@ def hmean(array, axis=0, dtype=None):
         size = array.shape[0]
     else:
         size = array.shape[axis]
-
-    inverse_mean = da.sum(1.0 / array, axis=axis, dtype=dtype)
-    is_inf = da.logical_not(da.isfinite(inverse_mean))
+    with np.errstate(divide='ignore'):
+        inverse_mean = va.sum(1.0 / array, axis=axis, dtype=dtype)
+    is_inf = va.logical_not(va.isfinite(inverse_mean))
     hmean = size / inverse_mean
     hmean[is_inf] = np.nan
 

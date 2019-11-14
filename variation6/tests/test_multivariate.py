@@ -3,31 +3,38 @@ import unittest
 import numpy as np
 import dask.array as da
 
-from variation6 import FLT_VARS, GT_FIELD
+from variation6 import GT_FIELD
 from variation6.tests import TEST_DATA_DIR
 from variation6.in_out.zarr import load_zarr
-from variation6.stats.multivariate import gts_as_mat012, do_pca
-from variation6.filters import remove_low_call_rate_vars
+from variation6.stats.multivariate import do_pca
 from variation6.variations import Variations
+from variation6.compute import compute
 
 
 class MultivariateTest(unittest.TestCase):
 
-    def test_gts_to_012mat(self):
+    def xtest_do_pca(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        variations = remove_low_call_rate_vars(variations, min_call_rate=0)[FLT_VARS]
-        gts012 = gts_as_mat012(variations)
+        do_pca(variations)
 
-        expected = [[-1, 0, 2], [-1, 0, 2], [-1, 0, 2],
-                    [ 1, -1, 0], [-1, -1, -1], [-1, 1, -1], [-1, 1, 2]]
-        self.assertTrue(np.allclose(expected, gts012.compute()))
+        gts = np.array([[[0, 0], [0, 0], [1, 1]],
+                        [[0, 0], [0, 0], [1, 1]],
+                        [[0, 0], [0, 0], [1, 1]],
+                        [[0, 0], [0, 0], [1, 1]]])
+        variations = Variations()
+        variations.samples = da.from_array(np.array(['a', 'b', 'c']))
+        variations[GT_FIELD] = da.from_array(gts)
 
+        res = do_pca(variations)
+        projs = res['projections']
+        assert projs.shape[0] == gts.shape[1]
+        assert np.allclose(projs[0], projs[1])
+        assert not np.allclose(projs[0], projs[2])
+
+    def test_do_pca_in_memory(self):
         variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
-        gts012 = gts_as_mat012(variations)
-        self.assertTrue(np.allclose(expected, gts012.compute()))
-
-    def test_do_pca(self):
-        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        variations = compute({'vars': variations},
+                             store_variation_to_memory=True)['vars']
         do_pca(variations)
 
         gts = np.array([[[0, 0], [0, 0], [1, 1]],
