@@ -1,6 +1,13 @@
+import math
+import re
+
 import dask.array as da
 import numpy as np
-from variation6 import EmptyVariationsError
+
+from variation6.compute import compute
+from variation6 import MISSING_VALUES
+
+DEF_NUM_BINS = 40
 
 
 def _same_interface_funcs(funcname, array, *args, **kwargs):
@@ -11,8 +18,8 @@ def _same_interface_funcs(funcname, array, *args, **kwargs):
     else:
         msg = 'Not implemeted for type not in dask array or numpy ndarray'
         raise NotImplementedError(msg)
-
-    return getattr(module, funcname)(array, *args, **kwargs)
+    func = getattr(module, funcname)
+    return func(array, *args, **kwargs)
 
 
 def sum(array, *args, **kwargs):  # @ReservedAssignment
@@ -35,8 +42,65 @@ def isinf(array, *args, **kwargs):
     return _same_interface_funcs('isinf', array, *args, **kwargs)
 
 
-def histogram(vector, *args, **kwargs):
-    return _same_interface_funcs('histogram', vector, *args, **kwargs)
+def histogram(vector, n_bins, limits, weights=None):
+
+    if n_bins is None:
+        n_bins = DEF_NUM_BINS
+
+    try:
+        dtype = vector.dtype
+    except AttributeError:
+        dtype = type(vector[0])
+
+    missing_value = MISSING_VALUES[dtype]
+
+    if weights is None:
+        if math.isnan(missing_value):
+            not_nan = ~isnan(vector)
+        else:
+            not_nan = vector != missing_value
+
+        vector = vector[not_nan]
+
+    if isinstance(vector, da.Array):
+        histo = da.histogram
+        if limits is None:
+            raise ValueError('Limits is mandatory to use this function')
+
+    else:
+        histo = np.histogram
+        if limits is None:
+            limits = (min(vector), max(vector))
+
+    try:
+        dtype = vector.dtype
+    except AttributeError:
+        dtype = type(vector[0])
+
+    missing_value = MISSING_VALUES[dtype]
+
+    if weights is None:
+        if math.isnan(missing_value):
+            not_nan = ~isnan(vector)
+        else:
+            not_nan = vector != missing_value
+
+        vector = vector[not_nan]
+
+    try:
+        result = histo(vector, bins=n_bins, range=limits, weights=weights)
+    except ValueError as error:
+        if ('parameter must be finite' in str(error) or
+                re.search('autodetected range of .*finite', str(error))):
+            isfinite = ~isinf(vector)
+            vector = vector[isfinite]
+            if weights is not None:
+                weights = weights[isfinite]
+
+            result = histo(vector, bins=n_bins, range=limits, weights=weights)
+        else:
+            raise
+    return result
 
 
 def count_nonzero(a, *args, **kwargs):
@@ -194,29 +258,26 @@ def map_blocks(func, *args, **kwargs):
         return func(*args)
 
 
-def make_sure_array_is_in_memory(array):
+def make_sure_array_is_in_memory(array, silence_runtime_warnings=False):
     if isinstance(array, da.Array):
-        array = array.compute()
+        array = compute(array, silence_runtime_warnings=silence_runtime_warnings)
     return array
 
 
+def pack(*args):
+    if isinstance(args[0], da.Array):
+        print('hh')
+        v = da.from_array(args)
+        print('ii')
+        print(v)
+        return v
+    else:
+        return list(args)
+
+
 ###############################################################################
-# Bad or faulty implementations                                               #
+# functions used just once. these are very specific, I gues wrongly implemented
 ###############################################################################
-# rara
-def assign_with_masking_value(array, masking_value, mask):
-    # this reshap must be done with a daskarray without nan values in shape
-    # and different shape for array and mask
-    if (array.shape and isinstance(array, da.Array) and
-        not np.any(np.isnan(array.shape)) and
-        len(array.shape) != len(mask.shape)):
-
-        mask = mask.reshape((array.shape))
-
-    array[mask] = masking_value
-
-
-# rara
 def assign_with_mask(array, using, mask):
     if isinstance(array, da.Array):
         values_to_modify = using
@@ -226,14 +287,19 @@ def assign_with_mask(array, using, mask):
     array[mask] = values_to_modify
 
 
-# rara
-def calculate_chunks(array):
-    # print("[calculate_chunks] mira estafuncion. NO se como poner diferents formas de poner chunks")
-    if isinstance(array, da.Array):
-        try:
-            return (array.chunks[0], (1,) * len(array.chunks[1]))
-        except IndexError:
-            raise EmptyVariationsError()
+def reshape_if_needed(array, mask):
+    if (array.shape and isinstance(array, da.Array) and
+        not np.any(np.isnan(array.shape)) and
+        len(array.shape) != len(mask.shape)):
 
-    return None
+        mask = mask.reshape((array.shape))
+    return mask
+
+
+# rara
+def reduce_chunk_dimensions(array):
+    chunks = None
+    if isinstance(array, da.Array):
+        chunks = (array.chunks[0], (1,) * len(array.chunks[1]))
+    return chunks
 ###############################################################################

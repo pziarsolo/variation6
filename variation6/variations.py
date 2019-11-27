@@ -119,7 +119,7 @@ class Variations:
                 msg = 'If variations is full of dask arrays with unknown '
                 msg += 'shape, can not define chunk size. This is defined by '
                 msg += 'chunks of each array'
-                warnings.warn(msg)
+                warnings.warn(msg, RuntimeWarning)
             return self._iterate_chunks_of_unknown_shape_arrays()
         else:
             if chunk_size is None:

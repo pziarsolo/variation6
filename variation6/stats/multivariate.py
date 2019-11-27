@@ -2,6 +2,7 @@
 from numpy import dot
 from numpy.linalg import svd
 import variation6.array as va
+from variation6 import GT_FIELD
 
 
 def _center_matrix(matrix):
@@ -14,7 +15,7 @@ def do_pca(variations):
     'It does a Principal Component Analysis'
     # transform the genotype data into a 2-dimensional matrix where each cell
     # has the number of non-reference alleles per call
-    gts012 = va.gts_as_mat012(variations)
+    gts012 = va.gts_as_mat012(variations[GT_FIELD])
     matrix = gts012.T
     va.make_sure_array_is_in_memory(matrix)
 

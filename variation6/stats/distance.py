@@ -17,7 +17,8 @@ def calc_kosman_dist(variations, min_num_snps=None,
                      silence_runtime_warning=False):
     variations_by_sample = OrderedDict()
 
-    samples = va.make_sure_array_is_in_memory(variations.samples)
+    samples = va.make_sure_array_is_in_memory(variations.samples,
+        silence_runtime_warnings=silence_runtime_warning)
     for sample in samples:
         variations_by_sample[sample] = keep_samples(variations, [sample])[FLT_VARS]
 
@@ -286,6 +287,7 @@ def calc_dset_pop_distance(variations, max_alleles, populations,
         res['corrected_hs']
         res['corrected_ht']
         num_vars_in_chunk = va.count_nonzero(~va.isnan(res['corrected_hs']))
+
         hs_in_chunk = va.nansum(res['corrected_hs'])
         ht_in_chunk = va.nansum(res['corrected_ht'])
 
@@ -365,7 +367,8 @@ def _calc_pairwise_dest(vars_for_pop1, vars_for_pop2, max_alleles,
         corrected_hs = va.full((num_vars,), np.nan, as_type_of=vars_for_pop1[GT_FIELD])
         corrected_ht = va.full((num_vars,), np.nan, as_type_of=vars_for_pop1[GT_FIELD])
     else:
-        mean_obs_het_per_var = va.nanmean(va.stack([obs_het1, obs_het2]), axis=0)
+        mean_obs_het_per_var = va.nanmean(va.stack([obs_het1, obs_het2],
+                                                   as_type_of=obs_het1), axis=0)
         corrected_hs = (called_gts_hmean / (called_gts_hmean - 1)) * (hs_per_var - (mean_obs_het_per_var / (2 * called_gts_hmean)))
 
         corrected_ht = ht_per_var + (corrected_hs / (called_gts_hmean * num_pops)) - (mean_obs_het_per_var / (2 * called_gts_hmean * num_pops))

@@ -1,58 +1,17 @@
-import math
-import re
 import numpy
 
 import variation6.array as va
+
 from variation6 import (GT_FIELD, MISSING_GT, AO_FIELD, MISSING_INT,
                         RO_FIELD, DP_FIELD, EmptyVariationsError,
-                        MIN_NUM_GENOTYPES_FOR_POP_STAT, MISSING_VALUES,
+                        MIN_NUM_GENOTYPES_FOR_POP_STAT,
                         ALT_FIELD, AD_FIELD)
 from variation6.plot import plot_histogram
 from variation6.compute import compute
 from variation6.in_out.zarr import load_zarr
+from variation6.array.array_calculations import DEF_NUM_BINS
 
-DEF_NUM_BINS = 40
 MIN_DP_FOR_CALL_HET = 20
-
-
-def _calc_histogram(vector, n_bins, limits, weights=None):
-    try:
-        dtype = vector.dtype
-    except AttributeError:
-        dtype = type(vector[0])
-
-    missing_value = MISSING_VALUES[dtype]
-
-    if weights is None:
-        if math.isnan(missing_value):
-            not_nan = ~va.isnan(vector)
-        else:
-            not_nan = vector != missing_value
-
-        vector = vector[not_nan]
-
-    if limits is None:
-        limits = (va.min(vector), va.max(vector))
-
-    try:
-        result = va.histogram(vector, bins=n_bins, range=limits,
-                              weights=weights)
-    except ValueError as error:
-        if ('parameter must be finite' in str(error) or
-                re.search('autodetected range of .*finite', str(error))):
-            isfinite = ~va.isinf(vector)
-            vector = vector[isfinite]
-            if weights is not None:
-                weights = weights[isfinite]
-            result = va.histogram(vector, bins=n_bins, range=limits,
-                                  weights=weights)
-        else:
-            raise
-    return result
-
-
-def histogram(vector, n_bins=DEF_NUM_BINS, limits=None, weights=None):
-    return _calc_histogram(vector, n_bins, limits=limits, weights=weights)
 
 
 def calc_missing_gt(variations, rates=True):
@@ -98,12 +57,12 @@ def _count_alleles_in_memory(gts, max_alleles, count_missing=True):
     for allele in alleles:
         gts_in_mem = allele == gts
         try:
-            allele_count = va.count_nonzero(gts_in_mem, axis=(1, 2))
+            allele_count = numpy.count_nonzero(gts_in_mem, axis=(1, 2))
         except numpy.AxisError:
             raise EmptyVariationsError()
         # print(allele_count)
         counts.append(allele_count.reshape(allele_count.shape[0], 1))
-    stacked = va.stack(counts, axis=2)
+    stacked = numpy.stack(counts, axis=2)
     return stacked.reshape(stacked.shape[0], stacked.shape[2])
 
 
@@ -112,11 +71,13 @@ def count_alleles(gts, max_alleles, count_missing=True):
     def _count_alleles(gts):
         return _count_alleles_in_memory(gts, max_alleles, count_missing=count_missing)
 
-    chunks = va.calculate_chunks(gts)
+    try:
+        chunks = va.reduce_chunk_dimensions(gts)
+    except IndexError:
+        raise EmptyVariationsError()
 
     allele_counts_by_snp = va.map_blocks(_count_alleles, gts, chunks=chunks,
                                          drop_axis=(2,))
-
     return allele_counts_by_snp
 
 
@@ -130,7 +91,7 @@ def calc_maf_by_gt(variations, max_alleles,
 
     with numpy.errstate(invalid='ignore'):
         mafs = max_ / sum_
-    # return {'aa': allele_counts_by_snp}
+
     return _mask_stats_with_few_samples(mafs, variations, min_num_genotypes)
 
 
@@ -257,7 +218,6 @@ def calc_allele_freq(variations, max_alleles,
     if gts.shape[0] == 0:
         return va.empty_array(variations)
     allele_counts = count_alleles(gts, max_alleles, count_missing=False)
-
     if allele_counts is None:
         raise ValueError('No alleles, everything is missing data')
     total_counts = va.sum(allele_counts, axis=1)
@@ -317,8 +277,8 @@ def _mask_stats_with_few_samples(stats, variations, min_num_genotypes,
                                                           min_num_genotypes,
                                                           num_called_gts=num_called_gts)
 
-        va.assign_with_masking_value(stats, masking_value, mask)
-
+        mask = va.reshape_if_needed(stats, mask)
+        stats[mask] = masking_value
     return stats
 
 
@@ -365,24 +325,27 @@ def summarize_variations(in_zarr_path, out_dir_path, draw_missin_rate=True,
 
     if draw_missin_rate:
         _stats = calc_missing_gt(variations, rates=True)
-        counts, edges = histogram(_stats, n_bins=num_bins)
+        counts, edges = va.histogram(_stats, n_bins=num_bins, limits=(0, 1))
         stats['missing'] = {'counts': counts, 'edges': edges}
 
     if draw_mac:
         _stats = calc_mac(variations, max_alleles, min_num_genotypes)
-        counts, edges = histogram(_stats, n_bins=num_bins)
+        counts, edges = va.histogram(_stats, n_bins=num_bins,
+                                     limits=(0, variations.num_samples))
         stats['mac'] = {'counts': counts, 'edges': edges}
 
     if draw_maf:
         _stats = calc_maf_by_gt(variations, max_alleles, min_num_genotypes)
-        counts, edges = histogram(_stats, n_bins=num_bins)
+        counts, edges = va.histogram(_stats, n_bins=num_bins,
+                                     limits=(0, 1))
         stats['maf'] = {'counts': counts, 'edges': edges}
 
     if draw_obs_het:
         _stats = calc_obs_het(
             variations, min_num_genotypes=min_num_genotypes,
             min_call_dp_for_het_call=min_call_dp_for_het_call)
-        counts, edges = histogram(_stats, n_bins=num_bins)
+        counts, edges = va.histogram(_stats, n_bins=num_bins,
+                                     limits=(0, 1))
         stats['obs_heterocigosity'] = {'counts': counts, 'edges': edges}
 
     computed_stats = compute(stats,

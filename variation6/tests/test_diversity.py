@@ -4,6 +4,7 @@ import numpy as np
 import dask.array as da
 import math
 
+import variation6.array as va
 from variation6 import (GT_FIELD, AO_FIELD, RO_FIELD, DP_FIELD,
                         EmptyVariationsError, FLT_VARS, ALT_FIELD)
 from variation6.in_out.zarr import load_zarr
@@ -15,8 +16,11 @@ from variation6.stats.diversity import (calc_missing_gt, calc_maf_by_gt,
                                         calc_mac, count_alleles,
                                         calc_obs_het, calc_expected_het,
                                         calc_allele_freq, calc_diversities,
-                                        calc_unbias_expected_het)
+                                        calc_unbias_expected_het,
+                                        summarize_variations)
 from variation6.filters import remove_low_call_rate_vars, keep_samples
+from tempfile import mkdtemp
+from pathlib import Path
 
 
 def _create_empty_dask_variations():
@@ -470,11 +474,31 @@ class DiversitiesTests(unittest.TestCase):
         self.assertAlmostEqual(result['obs_het'], 0.333, places=2)
 
 
+class SummarizeStatsTests(unittest.TestCase):
+
+    def test_summarize(self):
+        tmpdir = mkdtemp()
+        summarize_variations(TEST_DATA_DIR / 'test.zarr', Path(tmpdir),
+                             min_num_genotypes=0, draw_obs_het=False,
+                             draw_maf=False,
+                             silence_runtime_warnings=True)
+
+    def test_calc_maf_by_gt2(self):
+        variations = load_zarr(TEST_DATA_DIR / 'test.zarr')
+        mafs = calc_maf_by_gt(variations, max_alleles=3,
+                              min_num_genotypes=0)
+
+        # res = compute(mafs, silence_runtime_warnings=True)
+        counts, edges = va.histogram(mafs, n_bins=5, limits=(0, 1))
+        cc = compute({'counts': counts, 'edges': edges},
+                     silence_runtime_warnings=True)
+        print(cc)
+
+
 if __name__ == '__main__':
-#     import sys; sys.argv = ['', 'AlleleFreqTests']
+#     import sys; sys.argv = ['',
 #                                'StatsTest.test_empty_gt_allele_count',
 #                              'StatsTest.test_calc_mac',
-#                             'StatsTest.test_calc_mac_in_memory']
+#                              'SummarizeStatsTests.test_calc_maf_by_gt2']
 #     ]
     unittest.main()
-

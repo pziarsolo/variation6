@@ -29,7 +29,8 @@ class PairwiseFilterTest(unittest.TestCase):
         vars1 = keep_samples(variations, ['0'])[FLT_VARS]
         vars2 = keep_samples(variations, ['1'])[FLT_VARS]
         snp_by_snp_compartion_array = _kosman(vars1, vars2)
-        distance_ab = compute(snp_by_snp_compartion_array)
+        distance_ab = compute(snp_by_snp_compartion_array,
+                              silence_runtime_warnings=True)
         distance = distance_ab.sum() / distance_ab.shape[0]
 
         assert distance == 1 / 3
@@ -45,7 +46,8 @@ class PairwiseFilterTest(unittest.TestCase):
         vars1 = keep_samples(variations, ['0'])[FLT_VARS]
         vars2 = keep_samples(variations, ['1'])[FLT_VARS]
         snp_by_snp_compartion_array = _kosman(vars1, vars2)
-        distance_ab = compute(snp_by_snp_compartion_array)
+        distance_ab = compute(snp_by_snp_compartion_array,
+                              silence_runtime_warnings=True)
         distance = distance_ab.sum() / distance_ab.shape[0]
         assert distance == 0
 
@@ -58,7 +60,8 @@ class PairwiseFilterTest(unittest.TestCase):
         vars1 = keep_samples(variations, ['0'])[FLT_VARS]
         vars2 = keep_samples(variations, ['1'])[FLT_VARS]
         snp_by_snp_compartion_array = _kosman(vars1, vars2)
-        distance_ab = compute(snp_by_snp_compartion_array)
+        distance_ab = compute(snp_by_snp_compartion_array,
+                              silence_runtime_warnings=True)
         distance = distance_ab.sum() / distance_ab.shape[0]
         assert distance == 0.45
 
@@ -124,7 +127,8 @@ class PairwiseFilterTest(unittest.TestCase):
         vars2 = keep_samples(variations, ['1'])[FLT_VARS]
 
         snp_by_snp_compartion_array = _kosman(vars1, vars2)
-        distance_ab = compute(snp_by_snp_compartion_array)
+        distance_ab = compute(snp_by_snp_compartion_array,
+                              silence_runtime_warnings=True)
 
         c = np.array([[-1, -1], [-1, -1], [0, 1],
                          [0, 0], [0, 0], [0, 1], [0, 1],
@@ -142,7 +146,8 @@ class PairwiseFilterTest(unittest.TestCase):
         vars2 = keep_samples(variations, ['1'])[FLT_VARS]
 
         snp_by_snp_compartion_array = _kosman(vars1, vars2)
-        distance_cd = compute(snp_by_snp_compartion_array)
+        distance_cd = compute(snp_by_snp_compartion_array,
+                              silence_runtime_warnings=True)
 
         assert np.all(distance_ab == distance_cd)
 
@@ -197,7 +202,8 @@ class PairwiseFilterTest(unittest.TestCase):
         samples = np.array([str(i) for i in range(gts.shape[1])])
         variations.samples = da.from_array(samples)
         variations[GT_FIELD] = da.from_array(gts)
-        distances, samples = calc_kosman_dist(variations)
+        distances, samples = calc_kosman_dist(variations,
+                                              silence_runtime_warning=True)
         expected = [0.33333333, 0.75, 0.75, 0.5, 0.5, 0.]
         assert np.allclose(distances, expected)
 
@@ -386,6 +392,7 @@ class DsetDistTest(unittest.TestCase):
                                        silence_runtime_warnings=True,
                                        populations=pops, min_num_genotypes=0)
         assert np.allclose(dists, [0.65490196])
+
         gts = [[missing, missing, missing, missing, missing, (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
                [missing, missing, missing, missing, missing, (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
                [missing, missing, missing, missing, missing, (3, 2), (3, 4), (2, 2), (2, 4), (4, 4), (-1, -1)],
@@ -400,7 +407,6 @@ class DsetDistTest(unittest.TestCase):
         variations.samples = da.from_array(np.array(samples))
         variations[GT_FIELD] = da.from_array(np.array(gts))
         variations[DP_FIELD] = da.from_array(np.array(dps))
-
         dists = calc_dset_pop_distance(variations, max_alleles=5,
                                        silence_runtime_warnings=True,
                                        populations=pops, min_num_genotypes=0)
@@ -408,6 +414,5 @@ class DsetDistTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    import sys; sys.argv = ['.',
-                            'DsetDistTest']
+#     import sys; sys.argv = ['.', 'DsetDistTest.test_empty_pop']
     unittest.main()
