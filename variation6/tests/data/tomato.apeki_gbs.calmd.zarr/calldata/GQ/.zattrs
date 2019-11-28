@@ -1,0 +1,6 @@
+{
+    "Description": "Genotype Quality, the Phred-scaled marginal (or unconditional) probability of the called genotype",
+    "ID": "GQ",
+    "Number": "1",
+    "Type": "Float"
+}
