@@ -10,7 +10,7 @@ addons:
 
 env:
   global:
-  - PYTHONPATH="/home/travis/build/pziarsolo/vaition6"
+  - PYTHONPATH="/home/travis/build/pziarsolo/variation6"
   - PIP_USE_MIRRORS=true
 
 install:
