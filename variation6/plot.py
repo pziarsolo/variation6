@@ -1,3 +1,5 @@
+import numpy
+
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
