@@ -324,9 +324,9 @@ def summarize_variations(in_zarr_path, out_dir_path, draw_missin_rate=True,
     num_samples = variations.num_samples
 
     if draw_missin_rate:
-        _stats = calc_missing_gt(variations, rates=True)
+        _stats = calc_called_gt(variations, rates=True)
         counts, edges = va.histogram(_stats, n_bins=num_bins, limits=(0, 1))
-        stats['missing'] = {'counts': counts, 'edges': edges}
+        stats['called'] = {'counts': counts, 'edges': edges}
 
     if draw_mac:
         _stats = calc_mac(variations, max_alleles, min_num_genotypes)
