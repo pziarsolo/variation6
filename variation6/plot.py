@@ -53,6 +53,8 @@ def plot_stacked_histograms(counts, edges, fhand=None, axes=None, vlines=None,
     if mpl_params is None:
         mpl_params = {}
 
+    edges = numpy.array(edges)
+
     print_figure = False
     if axes is None:
         print_figure = True
@@ -62,9 +64,10 @@ def plot_stacked_histograms(counts, edges, fhand=None, axes=None, vlines=None,
         axes.set_yscale('log')
     width = edges[1:] - edges[:-1]
     bottom = None
+    x_values = (edges[:-1] + edges[1:]) / 2
     for idx, (label, this_counts) in enumerate(counts.items()):
         color = cm.Paired(1. * idx / len(counts))
-        axes.bar(edges[:-1], this_counts, width=width, bottom=bottom,
+        axes.bar(x_values, this_counts, width=width, bottom=bottom,
                  color=color, label=label, **kwargs)
         if bottom is None:
             bottom = this_counts
@@ -73,7 +76,7 @@ def plot_stacked_histograms(counts, edges, fhand=None, axes=None, vlines=None,
 
     if bin_labels is not None:
         assert len(bin_labels) == len(list(edges)) - 1
-        ticks = edges[:-1] + width / 2
+        ticks = x_values
         axes.set_xticks(ticks)
         xticklabels = list(map(str, bin_labels))
         axes.set_xticklabels(xticklabels, rotation='vertical')
