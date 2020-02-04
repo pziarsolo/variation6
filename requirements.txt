@@ -1,5 +1,5 @@
 dask[complete]
 scikit-allel
-zarr
+zarr<2.4
 h5py
 matplotlib
