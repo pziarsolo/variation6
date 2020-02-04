@@ -1,6 +1,6 @@
 
 from numpy import dot
-from numpy.linalg import svd
+from numpy import linalg
 import variation6.array as va
 from variation6 import GT_FIELD
 
@@ -33,7 +33,7 @@ def do_pca(variations):
     # cen_scaled_matrix = cen_matrix / math.sqrt(n_rows - 1)
     cen_scaled_matrix = cen_matrix
 
-    singular_vals, princomps = svd(cen_scaled_matrix, full_matrices=False)[1:]
+    singular_vals, princomps = linalg.svd(cen_scaled_matrix, full_matrices=False)[1:]
     eig_vals = singular_vals ** 2
     pcnts = eig_vals / eig_vals.sum() * 100.0
     projections = dot(princomps, cen_matrix.T).T
