@@ -17,8 +17,7 @@ def do_pca(variations):
     # has the number of non-reference alleles per call
     gts012 = va.gts_as_mat012(variations[GT_FIELD])
     matrix = gts012.T
-    va.make_sure_array_is_in_memory(matrix)
-
+    matrix = va.make_sure_array_is_in_memory(matrix)
     n_rows, n_cols = matrix.shape
     if n_cols < n_rows:
         # This restriction is in the matplotlib implementation, but I don't
@@ -32,7 +31,6 @@ def do_pca(variations):
     # variances
     # cen_scaled_matrix = cen_matrix / math.sqrt(n_rows - 1)
     cen_scaled_matrix = cen_matrix
-
     singular_vals, princomps = linalg.svd(cen_scaled_matrix, full_matrices=False)[1:]
     eig_vals = singular_vals ** 2
     pcnts = eig_vals / eig_vals.sum() * 100.0

@@ -266,10 +266,7 @@ def make_sure_array_is_in_memory(array, silence_runtime_warnings=False):
 
 def pack(*args):
     if isinstance(args[0], da.Array):
-        print('hh')
         v = da.from_array(args)
-        print('ii')
-        print(v)
         return v
     else:
         return list(args)

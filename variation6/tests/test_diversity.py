@@ -492,7 +492,8 @@ class SummarizeStatsTests(unittest.TestCase):
         counts, edges = va.histogram(mafs, n_bins=5, limits=(0, 1))
         cc = compute({'counts': counts, 'edges': edges},
                      silence_runtime_warnings=True)
-        print(cc)
+        self.assertTrue(np.all(cc['counts'] == [0, 0, 4, 2, 0]))
+        self.assertTrue(np.all(np.isclose(cc['edges'], [0 , 0.2, 0.4, 0.6, 0.8, 1])))
 
 
 if __name__ == '__main__':

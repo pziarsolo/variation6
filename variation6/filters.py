@@ -87,8 +87,7 @@ def remove_samples(variations, samples):
 
 
 def _filter_samples(variations, samples, reverse=False):
-    va.make_sure_array_is_in_memory(variations.samples)
-    samples_in_variation = np.copy(variations.samples)
+    samples_in_variation = va.make_sure_array_is_in_memory(variations.samples)
     sample_cols = np.array(sorted(list(samples_in_variation).index(sample) for sample in samples))
     samples = [samples_in_variation[index] for index in sample_cols]
 
